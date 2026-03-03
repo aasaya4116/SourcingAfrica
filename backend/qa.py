@@ -68,6 +68,15 @@ Rules:
 - When relevant, note patterns across sources (e.g. multiple outlets covering the same story)"""
 
 
+def web_search(query: str, max_results: int = 5) -> list[dict]:
+    try:
+        from duckduckgo_search import DDGS
+        with DDGS() as ddgs:
+            return list(ddgs.text(query + " Africa", max_results=max_results))
+    except Exception:
+        return []
+
+
 def build_context(articles: list[dict]) -> str:
     lines = []
     for a in articles:
@@ -97,8 +106,21 @@ def answer(question: str, days: int = 30) -> dict:
             "article_count": 0,
         }
 
-    context = build_context(articles)
+    archive_context = build_context(articles)
     today = datetime.now(timezone.utc).strftime("%d %B %Y")
+
+    # Always supplement with live web results
+    web_results = web_search(question)
+    web_context = ""
+    if web_results:
+        web_lines = []
+        for r in web_results:
+            web_lines.append(
+                f"TITLE: {r.get('title', '')}\n"
+                f"SOURCE: {r.get('href', '')}\n"
+                f"SNIPPET: {r.get('body', '')}"
+            )
+        web_context = "\n\n--- LIVE WEB RESULTS ---\n" + "\n\n".join(web_lines)
 
     client = anthropic.Anthropic(api_key=api_key)
     msg = client.messages.create(
@@ -109,9 +131,13 @@ def answer(question: str, days: int = 30) -> dict:
             {
                 "role": "user",
                 "content": (
-                    f"Today is {today}. Here is the newsletter archive from the past {days} days:\n\n"
-                    f"{context}\n\n"
-                    f"Question: {question}"
+                    f"Today is {today}.\n\n"
+                    f"--- NEWSLETTER ARCHIVE (past {days} days) ---\n"
+                    f"{archive_context}"
+                    f"{web_context}\n\n"
+                    f"Question: {question}\n\n"
+                    f"Answer using the archive first. Use web results to fill gaps or add recency. "
+                    f"Label web-sourced facts with (Web) and archive facts with the source name and date."
                 ),
             }
         ],
@@ -120,4 +146,5 @@ def answer(question: str, days: int = 30) -> dict:
         "answer": msg.content[0].text.strip(),
         "article_count": len(articles),
         "days_covered": days,
+        "web_results": len(web_results),
     }

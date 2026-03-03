@@ -99,8 +99,9 @@ async function sendQuestion() {
     const data = await r.json();
     answerText.className = 'answer-text';
     answerText.textContent = data.answer;
+    const webNote = data.web_results > 0 ? ` · ${data.web_results} web results` : '';
     answerMeta.textContent =
-      `${data.article_count} articles · past ${data.days_covered} days`;
+      `${data.article_count} archive articles · past ${data.days_covered} days${webNote}`;
   } catch (err) {
     answerText.className = 'answer-text';
     answerText.textContent = `Error: ${err.message}`;
