@@ -13,7 +13,7 @@ from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
 from backend.db import init_db, get_recent_articles, get_sources, count_articles
-from backend.qa import answer, summarize_article
+from backend.qa import answer, summarize_article, backfill_summaries
 
 ROOT = Path(__file__).resolve().parent.parent
 FRONTEND_DIR = ROOT / "frontend"
@@ -24,6 +24,9 @@ app = FastAPI(title="Sourcing Africa", docs_url=None, redoc_url=None)
 @app.on_event("startup")
 def startup():
     init_db()
+    # Backfill summaries for any articles that don't have one yet
+    thread = threading.Thread(target=backfill_summaries, daemon=True)
+    thread.start()
 
 
 # ── API routes ────────────────────────────────────────────────────────────────
@@ -89,7 +92,8 @@ def article_summary(article_id: int):
         ).fetchone()
     if not row:
         raise HTTPException(status_code=404, detail="Article not found")
-    result = summarize_article(dict(row))
+    # Pass save=True so a cache miss is written back automatically
+    result = summarize_article(dict(row), save=True)
     if "error" in result:
         raise HTTPException(status_code=500, detail=result["error"])
     return result

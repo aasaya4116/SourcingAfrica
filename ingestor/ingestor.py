@@ -179,14 +179,32 @@ def fetch_and_store(service, cfg: dict) -> int:
                 source = name
                 break
 
-        insert_article({
+        article = {
             "message_id": message_id,
             "source":     source,
             "subject":    subject,
             "date":       parse_date(date_str),
             "body":       body,
             "from_addr":  from_header,
-        })
+        }
+        insert_article(article)
+
+        # Generate and cache summary immediately after storing
+        try:
+            import json as _json
+            from backend.db import _conn as _db_conn
+            from backend.qa import summarize_article
+            with _db_conn() as c:
+                row = c.execute(
+                    "SELECT id FROM articles WHERE message_id = ?", (message_id,)
+                ).fetchone()
+            if row:
+                article["id"] = row["id"]
+                summarize_article(article, save=True)
+                log.info("Summarised: [%s] %s", source, subject[:60])
+        except Exception as exc:
+            log.warning("Summary failed for '%s': %s", subject[:60], exc)
+
         new_count += 1
         log.info("Stored: [%s] %s", source, subject[:80])
 

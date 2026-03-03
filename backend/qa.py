@@ -24,8 +24,17 @@ Rules:
 - No markdown, no extra keys, just valid JSON"""
 
 
-def summarize_article(article: dict) -> dict:
+def summarize_article(article: dict, save: bool = False) -> dict:
     import json
+    from backend.db import save_summary
+
+    # Return cached summary if available
+    if article.get("summary_json"):
+        try:
+            return json.loads(article["summary_json"])
+        except Exception:
+            pass
+
     api_key = os.environ.get("ANTHROPIC_API_KEY")
     if not api_key:
         return {"error": "ANTHROPIC_API_KEY not set"}
@@ -45,14 +54,33 @@ def summarize_article(article: dict) -> dict:
     )
     try:
         raw = msg.content[0].text.strip()
-        # Strip markdown code fences if Claude wraps the JSON
         if raw.startswith("```"):
             raw = raw.split("```")[1]
             if raw.startswith("json"):
                 raw = raw[4:]
-        return json.loads(raw.strip())
+        result = json.loads(raw.strip())
+        if save and article.get("id"):
+            save_summary(article["id"], json.dumps(result))
+        return result
     except Exception:
         return {"error": "Could not parse summary"}
+
+
+def backfill_summaries():
+    """Generate and cache summaries for all articles that don't have one yet."""
+    import logging
+    from backend.db import get_unsummarised
+    log = logging.getLogger(__name__)
+    articles = get_unsummarised(limit=100)
+    if not articles:
+        return
+    log.info("Backfilling summaries for %d article(s)…", len(articles))
+    for a in articles:
+        result = summarize_article(a, save=True)
+        if "error" not in result:
+            log.info("Summarised: %s", a["subject"][:60])
+        else:
+            log.warning("Failed to summarise article %d: %s", a["id"], result["error"])
 
 
 SYSTEM = """You are a knowledgeable assistant for Sourcing Africa, a personal intelligence tool
