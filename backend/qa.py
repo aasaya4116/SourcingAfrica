@@ -44,7 +44,13 @@ def summarize_article(article: dict) -> dict:
         messages=[{"role": "user", "content": content}],
     )
     try:
-        return json.loads(msg.content[0].text.strip())
+        raw = msg.content[0].text.strip()
+        # Strip markdown code fences if Claude wraps the JSON
+        if raw.startswith("```"):
+            raw = raw.split("```")[1]
+            if raw.startswith("json"):
+                raw = raw[4:]
+        return json.loads(raw.strip())
     except Exception:
         return {"error": "Could not parse summary"}
 

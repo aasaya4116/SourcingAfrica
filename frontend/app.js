@@ -207,21 +207,24 @@ async function openArticle(id) {
       fetch(`/api/articles/${id}/summary`),
     ]);
     const a = await metaRes.json();
-    const s = await summaryRes.json();
 
     document.getElementById('modalSource').textContent = a.source;
     document.getElementById('modalDate').textContent   = a.date;
     document.getElementById('modalTitle').textContent  = a.subject;
 
-    document.getElementById('summaryHeadline').textContent  = s.headline || '';
-    document.getElementById('summarySoWhat').textContent    = s.so_what  || '';
+    if (!summaryRes.ok) throw new Error('Summary failed');
+    const s = await summaryRes.json();
+
+    document.getElementById('summaryHeadline').textContent = s.headline || '';
+    document.getElementById('summarySoWhat').textContent   = s.so_what  || '';
     const ul = document.getElementById('summaryHighlights');
     ul.innerHTML = (s.highlights || []).map(h => `<li>${escHtml(h)}</li>`).join('');
 
     document.getElementById('summaryLoading').hidden  = true;
     document.getElementById('summaryContent').hidden  = false;
-  } catch {
-    document.getElementById('summaryLoading').textContent = 'Could not load summary.';
+  } catch (err) {
+    document.getElementById('summaryLoading').hidden = false;
+    document.getElementById('summaryLoading').textContent = 'Could not load summary. Try again.';
   }
 }
 
