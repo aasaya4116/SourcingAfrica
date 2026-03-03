@@ -4,6 +4,7 @@ Serves the PWA and provides API endpoints for Q&A and article browsing.
 """
 
 import os
+import threading
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException
@@ -72,6 +73,20 @@ def status():
         "total_articles": count_articles(),
         "sources": get_sources(),
     }
+
+
+@app.post("/api/sync")
+def sync():
+    """Trigger a Gmail sync in the background."""
+    def _run():
+        import sys
+        sys.path.insert(0, str(ROOT))
+        from ingestor.ingestor import run_ingestor
+        run_ingestor()
+
+    thread = threading.Thread(target=_run, daemon=True)
+    thread.start()
+    return {"status": "sync started"}
 
 
 # ── Serve PWA (must come last) ────────────────────────────────────────────────
