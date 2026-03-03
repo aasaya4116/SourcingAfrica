@@ -61,6 +61,25 @@ def articles(limit: int = 20, source: str | None = None):
     }
 
 
+@app.get("/api/articles/{article_id}")
+def article_detail(article_id: int):
+    from backend.db import _conn
+    with _conn() as conn:
+        row = conn.execute(
+            "SELECT * FROM articles WHERE id = ?", (article_id,)
+        ).fetchone()
+    if not row:
+        raise HTTPException(status_code=404, detail="Article not found")
+    r = dict(row)
+    return {
+        "id":       r["id"],
+        "source":   r["source"],
+        "subject":  r["subject"],
+        "date":     r["date"][:10],
+        "body":     r["body"],
+    }
+
+
 @app.get("/api/sources")
 def sources():
     return {"sources": get_sources()}

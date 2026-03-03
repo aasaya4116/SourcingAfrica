@@ -139,7 +139,7 @@ function renderFeed(articles) {
     return;
   }
   feed.innerHTML = articles.map(a => `
-    <div class="article-card">
+    <div class="article-card" data-id="${a.id}">
       <div class="article-source">
         ${escHtml(a.source)}
         <span class="article-date">${a.date}</span>
@@ -148,6 +148,10 @@ function renderFeed(articles) {
       <div class="article-preview">${escHtml(a.preview)}</div>
     </div>
   `).join('');
+
+  feed.querySelectorAll('.article-card').forEach(card => {
+    card.addEventListener('click', () => openArticle(card.dataset.id));
+  });
 }
 
 async function buildFilters() {
@@ -182,6 +186,35 @@ function escHtml(str) {
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;');
 }
+
+// ── Article modal ─────────────────────────────────────────────────────────────
+
+const modalOverlay = document.getElementById('modalOverlay');
+const modalClose   = document.getElementById('modalClose');
+
+async function openArticle(id) {
+  modalOverlay.hidden = false;
+  document.getElementById('modalTitle').textContent = 'Loading…';
+  document.getElementById('modalSource').textContent = '';
+  document.getElementById('modalDate').textContent = '';
+  document.getElementById('modalBody').textContent = '';
+
+  try {
+    const r = await fetch(`/api/articles/${id}`);
+    const a = await r.json();
+    document.getElementById('modalSource').textContent = a.source;
+    document.getElementById('modalDate').textContent   = a.date;
+    document.getElementById('modalTitle').textContent  = a.subject;
+    document.getElementById('modalBody').textContent   = a.body;
+  } catch {
+    document.getElementById('modalBody').textContent = 'Could not load article.';
+  }
+}
+
+modalClose.addEventListener('click', () => { modalOverlay.hidden = true; });
+modalOverlay.addEventListener('click', e => {
+  if (e.target === modalOverlay) modalOverlay.hidden = true;
+});
 
 // ── Init ──────────────────────────────────────────────────────────────────────
 
