@@ -1,0 +1,7 @@
+.env
+data/
+ingestor/credentials.json
+ingestor/token.json
+__pycache__/
+*.pyc
+.DS_Store

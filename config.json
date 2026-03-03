@@ -1,0 +1,15 @@
+{
+  "gmail": {
+    "poll_hours": 6,
+    "senders": [
+      { "name": "Semafor Africa",   "match": "semafor.com" },
+      { "name": "Bloomberg Africa", "match": "bloomberg" },
+      { "name": "Tech Safari",      "match": "techsafari" }
+    ],
+    "lookback_days": 90
+  },
+  "analyst": {
+    "model": "claude-opus-4-6",
+    "context_articles": 40
+  }
+}

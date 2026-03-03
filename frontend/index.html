@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="theme-color" content="#0a0a0a" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="Sourcing Africa" />
+  <title>Sourcing Africa</title>
+  <link rel="manifest" href="/static/manifest.json" />
+  <link rel="apple-touch-icon" href="/static/icon-192.png" />
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+
+  <header>
+    <div class="header-inner">
+      <span class="logo">Sourcing Africa</span>
+      <span class="status-dot" id="statusDot" title="Loading..."></span>
+    </div>
+  </header>
+
+  <nav class="tab-bar">
+    <button class="tab active" data-tab="ask">Ask</button>
+    <button class="tab" data-tab="feed">Recent</button>
+  </nav>
+
+  <!-- ── Ask tab ── -->
+  <main class="tab-content active" id="tab-ask">
+    <div class="ask-wrapper">
+      <div class="suggestions">
+        <p class="hint">Try asking:</p>
+        <div class="chips">
+          <button class="chip">What happened in Nigerian fintech this week?</button>
+          <button class="chip">Any new funding rounds in East Africa?</button>
+          <button class="chip">Summarise the latest Bloomberg Africa issue</button>
+          <button class="chip">What macro trends should I watch?</button>
+        </div>
+      </div>
+
+      <div class="answer-box" id="answerBox" hidden>
+        <div class="answer-meta" id="answerMeta"></div>
+        <div class="answer-text" id="answerText"></div>
+      </div>
+    </div>
+
+    <div class="input-bar">
+      <textarea
+        id="questionInput"
+        placeholder="Ask anything about Africa…"
+        rows="1"
+        autocomplete="off"
+        spellcheck="false"
+      ></textarea>
+      <button class="send-btn" id="sendBtn" aria-label="Ask">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <line x1="22" y1="2" x2="11" y2="13"></line>
+          <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+        </svg>
+      </button>
+    </div>
+  </main>
+
+  <!-- ── Feed tab ── -->
+  <main class="tab-content" id="tab-feed" hidden>
+    <div class="filter-bar">
+      <button class="filter-chip active" data-source="">All</button>
+    </div>
+    <div class="feed" id="feed">
+      <div class="loading">Loading newsletters…</div>
+    </div>
+  </main>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>
