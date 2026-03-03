@@ -337,3 +337,57 @@ header {
 
 .article-card { cursor: pointer; transition: background 0.15s; }
 .article-card:active { background: #1a1a1a; }
+
+/* ── Summary content ───────────────────────────────────────────────── */
+.summary-loading {
+  color: var(--muted);
+  font-style: italic;
+  font-size: 0.9rem;
+  padding: 8px 0;
+}
+.summary-headline {
+  font-size: 1rem;
+  font-weight: 600;
+  line-height: 1.4;
+  margin-bottom: 16px;
+  color: var(--text);
+}
+.summary-highlights {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 20px;
+}
+.summary-highlights li {
+  padding-left: 20px;
+  position: relative;
+  font-size: 0.9rem;
+  line-height: 1.5;
+  color: #ddd;
+}
+.summary-highlights li::before {
+  content: "→";
+  position: absolute;
+  left: 0;
+  color: var(--accent);
+  font-weight: 700;
+}
+.summary-sowhat {
+  background: #1e1e1e;
+  border-left: 3px solid var(--accent);
+  border-radius: 0 8px 8px 0;
+  padding: 10px 12px;
+  font-size: 0.85rem;
+  line-height: 1.5;
+  color: #ccc;
+}
+.sowhat-label {
+  display: block;
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--accent);
+  margin-bottom: 4px;
+}

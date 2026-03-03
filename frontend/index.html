@@ -83,7 +83,17 @@
         <button class="modal-close" id="modalClose" aria-label="Close">✕</button>
       </div>
       <h2 class="modal-title" id="modalTitle"></h2>
-      <div class="modal-body" id="modalBody"></div>
+      <div class="modal-body" id="modalBody">
+        <div class="summary-loading" id="summaryLoading">Summarising…</div>
+        <div class="summary-content" id="summaryContent" hidden>
+          <p class="summary-headline" id="summaryHeadline"></p>
+          <ul class="summary-highlights" id="summaryHighlights"></ul>
+          <div class="summary-sowhat">
+            <span class="sowhat-label">So what</span>
+            <span id="summarySoWhat"></span>
+          </div>
+        </div>
+      </div>
     </div>
   </div>
 

@@ -10,6 +10,45 @@ import anthropic
 from backend.db import get_recent_articles, get_articles_since
 
 
+SUMMARIZE_SYSTEM = """You are a concise analyst summarizing African tech and business newsletters.
+
+Given a newsletter, return ONLY a JSON object with this exact structure:
+{
+  "headline": "<one punchy sentence capturing the single most important thing, ≤ 15 words>",
+  "highlights": ["<point 1>", "<point 2>", "<point 3>"],
+  "so_what": "<one sentence on why this matters>"
+}
+
+Rules:
+- highlights: exactly 3 bullet points, each ≤ 20 words, start with a strong verb
+- No markdown, no extra keys, just valid JSON"""
+
+
+def summarize_article(article: dict) -> dict:
+    import json
+    api_key = os.environ.get("ANTHROPIC_API_KEY")
+    if not api_key:
+        return {"error": "ANTHROPIC_API_KEY not set"}
+
+    client = anthropic.Anthropic(api_key=api_key)
+    content = (
+        f"Source: {article['source']}\n"
+        f"Date: {article['date']}\n"
+        f"Subject: {article['subject']}\n\n"
+        f"{article['body'][:3000]}"
+    )
+    msg = client.messages.create(
+        model=os.environ.get("CLAUDE_MODEL", "claude-opus-4-6"),
+        max_tokens=300,
+        system=SUMMARIZE_SYSTEM,
+        messages=[{"role": "user", "content": content}],
+    )
+    try:
+        return json.loads(msg.content[0].text.strip())
+    except Exception:
+        return {"error": "Could not parse summary"}
+
+
 SYSTEM = """You are a knowledgeable assistant for Sourcing Africa, a personal intelligence tool
 tracking African tech, business, and macro trends.
 

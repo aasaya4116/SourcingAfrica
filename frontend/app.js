@@ -194,20 +194,34 @@ const modalClose   = document.getElementById('modalClose');
 
 async function openArticle(id) {
   modalOverlay.hidden = false;
-  document.getElementById('modalTitle').textContent = 'Loading…';
-  document.getElementById('modalSource').textContent = '';
-  document.getElementById('modalDate').textContent = '';
-  document.getElementById('modalBody').textContent = '';
+  document.getElementById('modalTitle').textContent    = 'Loading…';
+  document.getElementById('modalSource').textContent   = '';
+  document.getElementById('modalDate').textContent     = '';
+  document.getElementById('summaryLoading').hidden     = false;
+  document.getElementById('summaryContent').hidden     = true;
 
   try {
-    const r = await fetch(`/api/articles/${id}`);
-    const a = await r.json();
+    // Load metadata and summary in parallel
+    const [metaRes, summaryRes] = await Promise.all([
+      fetch(`/api/articles/${id}`),
+      fetch(`/api/articles/${id}/summary`),
+    ]);
+    const a = await metaRes.json();
+    const s = await summaryRes.json();
+
     document.getElementById('modalSource').textContent = a.source;
     document.getElementById('modalDate').textContent   = a.date;
     document.getElementById('modalTitle').textContent  = a.subject;
-    document.getElementById('modalBody').textContent   = a.body;
+
+    document.getElementById('summaryHeadline').textContent  = s.headline || '';
+    document.getElementById('summarySoWhat').textContent    = s.so_what  || '';
+    const ul = document.getElementById('summaryHighlights');
+    ul.innerHTML = (s.highlights || []).map(h => `<li>${escHtml(h)}</li>`).join('');
+
+    document.getElementById('summaryLoading').hidden  = true;
+    document.getElementById('summaryContent').hidden  = false;
   } catch {
-    document.getElementById('modalBody').textContent = 'Could not load article.';
+    document.getElementById('summaryLoading').textContent = 'Could not load summary.';
   }
 }
 

@@ -13,7 +13,7 @@ from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
 from backend.db import init_db, get_recent_articles, get_sources, count_articles
-from backend.qa import answer
+from backend.qa import answer, summarize_article
 
 ROOT = Path(__file__).resolve().parent.parent
 FRONTEND_DIR = ROOT / "frontend"
@@ -78,6 +78,21 @@ def article_detail(article_id: int):
         "date":     r["date"][:10],
         "body":     r["body"],
     }
+
+
+@app.get("/api/articles/{article_id}/summary")
+def article_summary(article_id: int):
+    from backend.db import _conn
+    with _conn() as conn:
+        row = conn.execute(
+            "SELECT * FROM articles WHERE id = ?", (article_id,)
+        ).fetchone()
+    if not row:
+        raise HTTPException(status_code=404, detail="Article not found")
+    result = summarize_article(dict(row))
+    if "error" in result:
+        raise HTTPException(status_code=500, detail=result["error"])
+    return result
 
 
 @app.get("/api/sources")
