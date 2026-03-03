@@ -1,21 +1,45 @@
 /* Sourcing Africa — PWA App Logic */
 
-// ── Status indicator ──────────────────────────────────────────────────────────
+// ── Utility ───────────────────────────────────────────────────────────────────
+
+function escHtml(str) {
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+function timeAgo(isoString) {
+  if (!isoString) return '';
+  const diff = Math.floor((Date.now() - new Date(isoString).getTime()) / 1000);
+  if (diff < 60)   return 'just now';
+  if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
+  if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
+  return `${Math.floor(diff / 86400)}d ago`;
+}
+
+// ── Status + freshness ────────────────────────────────────────────────────────
+
+const freshnessLabel = document.getElementById('freshnessLabel');
+const statusDot      = document.getElementById('statusDot');
 
 async function checkStatus() {
-  const dot = document.getElementById('statusDot');
   try {
     const r = await fetch('/api/status');
     if (r.ok) {
       const d = await r.json();
-      dot.className = 'status-dot ok';
-      dot.title = `${d.total_articles} articles · ${(d.sources || []).join(', ')}`;
+      statusDot.className = 'status-dot ok';
+      statusDot.title = `${d.total_articles} articles · ${(d.sources || []).join(', ')}`;
+      if (d.last_sync_at) {
+        freshnessLabel.textContent = 'Synced ' + timeAgo(d.last_sync_at);
+      }
     } else {
-      dot.className = 'status-dot error';
+      statusDot.className = 'status-dot error';
     }
   } catch {
-    dot.className = 'status-dot error';
-    dot.title = 'Server unreachable';
+    statusDot.className = 'status-dot error';
+    statusDot.title = 'Server unreachable';
   }
 }
 
@@ -38,22 +62,67 @@ document.querySelectorAll('.tab').forEach(btn => {
   });
 });
 
-// ── Q&A ───────────────────────────────────────────────────────────────────────
+// ── Dynamic suggestions ───────────────────────────────────────────────────────
 
-const input   = document.getElementById('questionInput');
-const sendBtn = document.getElementById('sendBtn');
-const answerBox  = document.getElementById('answerBox');
-const answerText = document.getElementById('answerText');
-const answerMeta = document.getElementById('answerMeta');
+const chipList      = document.getElementById('chipList');
+const suggestionsBox = document.getElementById('suggestionsBox');
+
+const FALLBACK_CHIPS = [
+  'What happened in Nigerian fintech this week?',
+  'Any new funding rounds in East Africa?',
+  'Summarise the latest Bloomberg Africa issue',
+  'What macro trends should I watch?',
+];
+
+function renderChips(suggestions) {
+  chipList.innerHTML = '';
+  suggestions.forEach(text => {
+    const btn = document.createElement('button');
+    btn.className = 'chip';
+    btn.textContent = text;
+    btn.addEventListener('click', () => {
+      questionInput.value = text;
+      questionInput.dispatchEvent(new Event('input'));
+      sendQuestion();
+    });
+    chipList.appendChild(btn);
+  });
+}
+
+async function loadSuggestions() {
+  try {
+    const r = await fetch('/api/suggestions');
+    if (r.ok) {
+      const d = await r.json();
+      if (d.suggestions && d.suggestions.length > 0) {
+        renderChips(d.suggestions);
+        return;
+      }
+    }
+  } catch {}
+  // Fallback to static chips
+  renderChips(FALLBACK_CHIPS);
+}
+
+// ── Chat state ────────────────────────────────────────────────────────────────
+
+// Full conversation history: [{role, content}, ...]
+let conversationMessages = [];
+
+// ── Q&A / Chat ────────────────────────────────────────────────────────────────
+
+const chatMessages = document.getElementById('chatMessages');
+const questionInput = document.getElementById('questionInput');
+const sendBtn       = document.getElementById('sendBtn');
 
 // Auto-resize textarea
-input.addEventListener('input', () => {
-  input.style.height = 'auto';
-  input.style.height = Math.min(input.scrollHeight, 120) + 'px';
+questionInput.addEventListener('input', () => {
+  questionInput.style.height = 'auto';
+  questionInput.style.height = Math.min(questionInput.scrollHeight, 120) + 'px';
 });
 
 // Send on Enter (not Shift+Enter)
-input.addEventListener('keydown', e => {
+questionInput.addEventListener('keydown', e => {
   if (e.key === 'Enter' && !e.shiftKey) {
     e.preventDefault();
     sendQuestion();
@@ -62,33 +131,54 @@ input.addEventListener('keydown', e => {
 
 sendBtn.addEventListener('click', sendQuestion);
 
-// Suggestion chips
-document.querySelectorAll('.chip').forEach(chip => {
-  chip.addEventListener('click', () => {
-    input.value = chip.textContent;
-    input.dispatchEvent(new Event('input'));
-    sendQuestion();
-  });
-});
+function appendUserBubble(text) {
+  const div = document.createElement('div');
+  div.className = 'chat-msg user';
+  div.innerHTML = `<div class="bubble">${escHtml(text)}</div>`;
+  chatMessages.appendChild(div);
+  div.scrollIntoView({ behavior: 'smooth', block: 'end' });
+  return div;
+}
+
+function appendAssistantBubble() {
+  const div = document.createElement('div');
+  div.className = 'chat-msg assistant';
+  div.innerHTML = `<div class="bubble loading">Thinking…</div><div class="msg-meta"></div>`;
+  chatMessages.appendChild(div);
+  div.scrollIntoView({ behavior: 'smooth', block: 'end' });
+  return div;
+}
 
 async function sendQuestion() {
-  const q = input.value.trim();
+  const q = questionInput.value.trim();
   if (!q) return;
 
-  sendBtn.disabled = true;
-  answerBox.hidden = false;
-  answerMeta.textContent = '';
-  answerText.textContent = 'Thinking…';
-  answerText.className   = 'answer-text loading';
+  // Hide suggestions once chat starts
+  suggestionsBox.hidden = true;
 
-  // Scroll into view
-  answerBox.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  // Add user message to history and render
+  conversationMessages.push({ role: 'user', content: q });
+  appendUserBubble(q);
+
+  // Clear input
+  questionInput.value = '';
+  questionInput.style.height = 'auto';
+  sendBtn.disabled = true;
+
+  // Add assistant bubble (loading)
+  const assistantDiv = appendAssistantBubble();
+  const bubble  = assistantDiv.querySelector('.bubble');
+  const metaDiv = assistantDiv.querySelector('.msg-meta');
 
   try {
     const r = await fetch('/api/ask', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ question: q, days: 30 }),
+      body: JSON.stringify({
+        question: q,
+        days: 30,
+        messages: conversationMessages,
+      }),
     });
 
     if (!r.ok) {
@@ -97,17 +187,40 @@ async function sendQuestion() {
     }
 
     const data = await r.json();
-    answerText.className = 'answer-text';
-    answerText.textContent = data.answer;
-    const webNote = data.web_results > 0 ? ` · ${data.web_results} web results` : '';
-    answerMeta.textContent =
-      `${data.article_count} archive articles · past ${data.days_covered} days${webNote}`;
+    bubble.className = 'bubble';
+    bubble.textContent = data.answer;
+
+    const webNote = data.web_results > 0 ? ` · ${data.web_results} web` : '';
+    metaDiv.textContent = `${data.article_count} articles · ${data.days_covered}d${webNote}`;
+
+    // Save assistant reply to history
+    conversationMessages.push({ role: 'assistant', content: data.answer });
+
   } catch (err) {
-    answerText.className = 'answer-text';
-    answerText.textContent = `Error: ${err.message}`;
+    bubble.className = 'bubble';
+    bubble.textContent = `Error: ${err.message}`;
+    // Remove failed user message from history
+    conversationMessages.pop();
   } finally {
     sendBtn.disabled = false;
+    assistantDiv.scrollIntoView({ behavior: 'smooth', block: 'end' });
   }
+}
+
+// ── Unread state ──────────────────────────────────────────────────────────────
+
+const READ_KEY = 'sa_read_ids';
+
+function getReadIds() {
+  try {
+    return new Set(JSON.parse(localStorage.getItem(READ_KEY) || '[]'));
+  } catch { return new Set(); }
+}
+
+function markRead(id) {
+  const ids = getReadIds();
+  ids.add(String(id));
+  localStorage.setItem(READ_KEY, JSON.stringify([...ids]));
 }
 
 // ── Feed ──────────────────────────────────────────────────────────────────────
@@ -139,19 +252,33 @@ function renderFeed(articles) {
     feed.innerHTML = '<div class="empty">No articles yet. The ingestor is warming up.</div>';
     return;
   }
-  feed.innerHTML = articles.map(a => `
-    <div class="article-card" data-id="${a.id}">
-      <div class="article-source">
-        ${escHtml(a.source)}
-        <span class="article-date">${a.date}</span>
+
+  const readIds = getReadIds();
+
+  feed.innerHTML = articles.map(a => {
+    const unread = !readIds.has(String(a.id));
+    return `
+      <div class="article-card" data-id="${a.id}">
+        ${unread ? '<span class="unread-dot" aria-label="Unread"></span>' : ''}
+        <div class="article-source">
+          ${escHtml(a.source)}
+          <span class="article-date">${a.date}</span>
+        </div>
+        <div class="article-title">${escHtml(a.subject)}</div>
+        <div class="article-preview">${escHtml(a.preview)}</div>
       </div>
-      <div class="article-title">${escHtml(a.subject)}</div>
-      <div class="article-preview">${escHtml(a.preview)}</div>
-    </div>
-  `).join('');
+    `;
+  }).join('');
 
   feed.querySelectorAll('.article-card').forEach(card => {
-    card.addEventListener('click', () => openArticle(card.dataset.id));
+    card.addEventListener('click', () => {
+      const id = card.dataset.id;
+      markRead(id);
+      // Remove unread dot immediately
+      const dot = card.querySelector('.unread-dot');
+      if (dot) dot.remove();
+      openArticle(id);
+    });
   });
 }
 
@@ -178,16 +305,6 @@ function setFilter(source, btn) {
   loadFeed(source);
 }
 
-// ── Utility ───────────────────────────────────────────────────────────────────
-
-function escHtml(str) {
-  return String(str)
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
-}
-
 // ── Article modal ─────────────────────────────────────────────────────────────
 
 const modalOverlay = document.getElementById('modalOverlay');
@@ -199,10 +316,10 @@ async function openArticle(id) {
   document.getElementById('modalSource').textContent   = '';
   document.getElementById('modalDate').textContent     = '';
   document.getElementById('summaryLoading').hidden     = false;
+  document.getElementById('summaryLoading').textContent = 'Summarising…';
   document.getElementById('summaryContent').hidden     = true;
 
   try {
-    // Load metadata and summary in parallel
     const [metaRes, summaryRes] = await Promise.all([
       fetch(`/api/articles/${id}`),
       fetch(`/api/articles/${id}/summary`),
@@ -223,7 +340,7 @@ async function openArticle(id) {
 
     document.getElementById('summaryLoading').hidden  = true;
     document.getElementById('summaryContent').hidden  = false;
-  } catch (err) {
+  } catch {
     document.getElementById('summaryLoading').hidden = false;
     document.getElementById('summaryLoading').textContent = 'Could not load summary. Try again.';
   }
@@ -237,3 +354,4 @@ modalOverlay.addEventListener('click', e => {
 // ── Init ──────────────────────────────────────────────────────────────────────
 
 checkStatus();
+loadSuggestions();

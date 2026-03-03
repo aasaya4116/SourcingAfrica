@@ -23,7 +23,7 @@ from googleapiclient.discovery import build
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
-from backend.db import init_db, article_exists, insert_article
+from backend.db import init_db, article_exists, insert_article, set_meta
 
 logging.basicConfig(
     level=logging.INFO,
@@ -220,6 +220,7 @@ def run_ingestor():
         log.error("Missing env var: %s. Run gmail_auth.py first.", e)
         return
     n = fetch_and_store(service, cfg)
+    set_meta("last_sync_at", datetime.now(timezone.utc).isoformat())
     log.info("Ingestion complete. %d new article(s) stored.", n)
 
 

@@ -12,8 +12,8 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
-from backend.db import init_db, get_recent_articles, get_sources, count_articles
-from backend.qa import answer, summarize_article, backfill_summaries
+from backend.db import init_db, get_recent_articles, get_sources, count_articles, get_meta
+from backend.qa import answer, summarize_article, backfill_summaries, generate_suggestions
 
 ROOT = Path(__file__).resolve().parent.parent
 FRONTEND_DIR = ROOT / "frontend"
@@ -31,16 +31,23 @@ def startup():
 
 # ── API routes ────────────────────────────────────────────────────────────────
 
+class Message(BaseModel):
+    role: str
+    content: str
+
+
 class QuestionRequest(BaseModel):
     question: str
     days: int = 30
+    messages: list[Message] = []
 
 
 @app.post("/api/ask")
 def ask(req: QuestionRequest):
     if not req.question.strip():
         raise HTTPException(status_code=400, detail="Question cannot be empty")
-    result = answer(req.question.strip(), req.days)
+    msgs = [{"role": m.role, "content": m.content} for m in req.messages] or None
+    result = answer(req.question.strip(), req.days, messages=msgs)
     if "error" in result:
         raise HTTPException(status_code=500, detail=result["error"])
     return result
@@ -104,12 +111,20 @@ def sources():
     return {"sources": get_sources()}
 
 
+@app.get("/api/suggestions")
+def suggestions():
+    """Return 4 dynamic question chips generated from the current archive."""
+    chips = generate_suggestions()
+    return {"suggestions": chips}
+
+
 @app.get("/api/status")
 def status():
     return {
         "status": "ok",
         "total_articles": count_articles(),
         "sources": get_sources(),
+        "last_sync_at": get_meta("last_sync_at"),
     }
 
 
@@ -118,9 +133,12 @@ def sync():
     """Trigger a Gmail sync in the background."""
     def _run():
         import sys
+        from datetime import datetime, timezone
         sys.path.insert(0, str(ROOT))
         from ingestor.ingestor import run_ingestor
+        from backend.db import set_meta
         run_ingestor()
+        set_meta("last_sync_at", datetime.now(timezone.utc).isoformat())
 
     thread = threading.Thread(target=_run, daemon=True)
     thread.start()

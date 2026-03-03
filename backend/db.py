@@ -38,6 +38,12 @@ def init_db():
             conn.execute("ALTER TABLE articles ADD COLUMN summary_json TEXT")
         except Exception:
             pass
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS meta (
+                key   TEXT PRIMARY KEY,
+                value TEXT NOT NULL
+            )
+        """)
 
 
 def article_exists(message_id: str) -> bool:
@@ -111,3 +117,17 @@ def get_unsummarised(limit: int = 100) -> list[dict]:
 def count_articles() -> int:
     with _conn() as conn:
         return conn.execute("SELECT COUNT(*) FROM articles").fetchone()[0]
+
+
+def get_meta(key: str) -> str | None:
+    with _conn() as conn:
+        row = conn.execute("SELECT value FROM meta WHERE key = ?", (key,)).fetchone()
+        return row["value"] if row else None
+
+
+def set_meta(key: str, value: str):
+    with _conn() as conn:
+        conn.execute(
+            "INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)",
+            (key, value)
+        )

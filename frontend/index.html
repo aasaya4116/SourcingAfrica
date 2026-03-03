@@ -17,7 +17,10 @@
   <header>
     <div class="header-inner">
       <span class="logo">Sourcing Africa</span>
-      <span class="status-dot" id="statusDot" title="Loading..."></span>
+      <div class="header-right">
+        <span class="freshness" id="freshnessLabel"></span>
+        <span class="status-dot" id="statusDot" title="Loading..."></span>
+      </div>
     </div>
   </header>
 
@@ -28,20 +31,13 @@
 
   <!-- ── Ask tab ── -->
   <main class="tab-content active" id="tab-ask">
-    <div class="ask-wrapper">
-      <div class="suggestions">
+    <div class="chat-messages" id="chatMessages">
+      <!-- Shown when chat is empty -->
+      <div class="suggestions" id="suggestionsBox">
         <p class="hint">Try asking:</p>
-        <div class="chips">
-          <button class="chip">What happened in Nigerian fintech this week?</button>
-          <button class="chip">Any new funding rounds in East Africa?</button>
-          <button class="chip">Summarise the latest Bloomberg Africa issue</button>
-          <button class="chip">What macro trends should I watch?</button>
+        <div class="chips" id="chipList">
+          <!-- Populated by JS from /api/suggestions -->
         </div>
-      </div>
-
-      <div class="answer-box" id="answerBox" hidden>
-        <div class="answer-meta" id="answerMeta"></div>
-        <div class="answer-text" id="answerText"></div>
       </div>
     </div>
 
