@@ -128,56 +128,6 @@ def top5(refresh: bool = False):
     return {"stories": stories}
 
 
-@app.get("/api/top5/debug")
-def top5_debug():
-    """Diagnostic endpoint — full trace of get_top5 logic."""
-    import json, os
-    from backend.db import get_articles_since, get_recent_articles, get_meta, set_meta
-    from backend.qa import TOP5_SYSTEM, get_top5
-
-    # Cache state
-    cached_json = get_meta("top5_json")
-    cached_ts   = get_meta("top5_updated_at")
-
-    # Force-clear cache so get_top5() makes a fresh call
-    set_meta("top5_updated_at", "2000-01-01T00:00:00+00:00")
-
-    # Run get_top5() and capture result
-    result = get_top5()
-
-    # Direct Claude call for comparison
-    articles = get_articles_since(14) or get_recent_articles(limit=50)
-    article_ids = [a["id"] for a in articles[:60]]
-    article_list = "\n".join(
-        f"{a['id']} | {a['source']} | {a['date'][:10]} | {a['subject']}"
-        for a in articles[:60]
-    )
-    api_key = os.environ.get("ANTHROPIC_API_KEY")
-    claude_raw = None
-    claude_error = None
-    if api_key:
-        import anthropic
-        client = anthropic.Anthropic(api_key=api_key)
-        try:
-            msg = client.messages.create(
-                model=os.environ.get("CLAUDE_MODEL", "claude-opus-4-6"),
-                max_tokens=300,
-                system=TOP5_SYSTEM,
-                messages=[{"role": "user", "content": f"Articles:\n{article_list}"}],
-            )
-            claude_raw = msg.content[0].text.strip()
-        except Exception as exc:
-            claude_error = str(exc)
-
-    return {
-        "cache_top5_json": cached_json,
-        "cache_top5_updated_at": cached_ts,
-        "get_top5_result": result,
-        "article_count": len(articles),
-        "article_ids": article_ids[:20],
-        "claude_raw": claude_raw,
-        "claude_error": claude_error,
-    }
 
 
 @app.get("/api/status")
