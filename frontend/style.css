@@ -462,28 +462,38 @@ header {
   font-size: 0.9rem;
   padding: 8px 0;
 }
-.summary-headline {
-  font-size: 1rem;
-  font-weight: 600;
-  line-height: 1.4;
-  margin-bottom: 16px;
-  color: var(--text);
+.summary-paragraph {
+  font-size: 0.9rem;
+  line-height: 1.75;
+  color: #ddd;
+  margin-bottom: 20px;
 }
-.summary-highlights {
+.summary-section {
+  margin-bottom: 20px;
+}
+.section-label {
+  display: block;
+  font-size: 0.68rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+  margin-bottom: 10px;
+}
+.summary-takeaways {
   list-style: none;
   display: flex;
   flex-direction: column;
   gap: 10px;
-  margin-bottom: 20px;
 }
-.summary-highlights li {
+.summary-takeaways li {
   padding-left: 20px;
   position: relative;
-  font-size: 0.9rem;
+  font-size: 0.88rem;
   line-height: 1.5;
   color: #ddd;
 }
-.summary-highlights li::before {
+.summary-takeaways li::before {
   content: "→";
   position: absolute;
   left: 0;

@@ -394,10 +394,12 @@ async function openArticle(id) {
     if (!summaryRes.ok) throw new Error('Summary failed');
     const s = await summaryRes.json();
 
-    document.getElementById('summaryHeadline').textContent = s.headline || '';
-    document.getElementById('summarySoWhat').textContent   = s.so_what  || '';
-    const ul = document.getElementById('summaryHighlights');
-    ul.innerHTML = (s.highlights || []).map(h => `<li>${escHtml(h)}</li>`).join('');
+    // Support new format (summary + takeaways) and old format (headline + highlights)
+    document.getElementById('summaryParagraph').textContent = s.summary || s.headline || '';
+    document.getElementById('summarySoWhat').textContent    = s.so_what || '';
+    const ul = document.getElementById('summaryTakeaways');
+    const items = s.takeaways || s.highlights || [];
+    ul.innerHTML = items.map(h => `<li>${escHtml(h)}</li>`).join('');
 
     document.getElementById('summaryLoading').hidden  = true;
     document.getElementById('summaryContent').hidden  = false;

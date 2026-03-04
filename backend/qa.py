@@ -14,13 +14,15 @@ SUMMARIZE_SYSTEM = """You are a concise analyst summarizing African tech and bus
 
 Given a newsletter, return ONLY a JSON object with this exact structure:
 {
-  "headline": "<one punchy sentence capturing the single most important thing, ≤ 15 words>",
-  "highlights": ["<point 1>", "<point 2>", "<point 3>"],
-  "so_what": "<one sentence on why this matters>"
+  "summary": "<4-6 sentence paragraph covering what happened, key details, and context>",
+  "takeaways": ["<takeaway 1>", "<takeaway 2>", "<takeaway 3>", "<takeaway 4>"],
+  "so_what": "<one sentence on why this matters for African tech or business>"
 }
 
 Rules:
-- highlights: exactly 3 bullet points, each ≤ 20 words, start with a strong verb
+- summary: 4-6 complete sentences, factual, covering the core story and key details
+- takeaways: 3-4 bullets, each ≤ 20 words, start with a strong verb, most important insights only
+- so_what: one crisp sentence on the broader implication
 - No markdown, no extra keys, just valid JSON"""
 
 
@@ -48,7 +50,7 @@ def summarize_article(article: dict, save: bool = False) -> dict:
     )
     msg = client.messages.create(
         model=os.environ.get("CLAUDE_MODEL", "claude-opus-4-6"),
-        max_tokens=300,
+        max_tokens=500,
         system=SUMMARIZE_SYSTEM,
         messages=[{"role": "user", "content": content}],
     )
