@@ -119,8 +119,11 @@ def suggestions():
 
 
 @app.get("/api/top5")
-def top5():
+def top5(refresh: bool = False):
     """Return Claude-curated top 5 stories from the last 14 days (cached 6h)."""
+    if refresh:
+        from backend.db import set_meta
+        set_meta("top5_updated_at", "2000-01-01T00:00:00+00:00")
     stories = get_top5()
     return {"stories": stories}
 

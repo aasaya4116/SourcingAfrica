@@ -2,10 +2,13 @@
 Claude-powered Q&A against the article archive.
 """
 
+import logging
 import os
 from datetime import datetime, timezone
 
 import anthropic
+
+log = logging.getLogger(__name__)
 
 from backend.db import get_recent_articles, get_articles_since, get_meta, set_meta
 
@@ -49,6 +52,9 @@ def get_top5() -> list[dict]:
         for a in articles[:60]
     )
 
+    article_map = {a["id"]: a for a in articles}
+    log.info("get_top5: %d articles available, IDs: %s", len(articles), list(article_map.keys())[:10])
+
     client = anthropic.Anthropic(api_key=api_key)
     try:
         msg = client.messages.create(
@@ -58,13 +64,13 @@ def get_top5() -> list[dict]:
             messages=[{"role": "user", "content": f"Articles:\n{article_list}"}],
         )
         raw = msg.content[0].text.strip()
+        log.info("get_top5 Claude raw: %s", raw[:300])
         if raw.startswith("```"):
             raw = raw.split("```")[1]
             if raw.startswith("json"):
                 raw = raw[4:]
         picks = json.loads(raw.strip())
         if isinstance(picks, list):
-            article_map = {a["id"]: a for a in articles}
             result = []
             for p in picks[:5]:
                 aid = int(p.get("id", 0))
@@ -77,12 +83,14 @@ def get_top5() -> list[dict]:
                         "date":    a["date"],
                         "reason":  p.get("reason", ""),
                     })
+                else:
+                    log.warning("get_top5: Claude picked id=%s not in article_map", aid)
             if result:
                 set_meta("top5_json",       json.dumps(result))
                 set_meta("top5_updated_at", datetime.now(timezone.utc).isoformat())
                 return result
-    except Exception:
-        pass
+    except Exception as exc:
+        log.error("get_top5 failed: %s", exc, exc_info=True)
     return []
 
 
