@@ -15,6 +15,7 @@ from datetime import datetime, timezone, timedelta
 from email import message_from_bytes
 from pathlib import Path
 
+import feedparser
 from apscheduler.schedulers.blocking import BlockingScheduler
 from bs4 import BeautifulSoup
 from google.oauth2.credentials import Credentials
@@ -211,17 +212,94 @@ def fetch_and_store(service, cfg: dict) -> int:
     return new_count
 
 
+def fetch_rss(feed_cfg: dict) -> int:
+    """Fetch new articles from a single RSS feed and store them."""
+    url  = feed_cfg["url"]
+    name = feed_cfg["name"]
+    log.info("Polling RSS: %s (%s)", name, url)
+
+    feed = feedparser.parse(url)
+    new_count = 0
+
+    for entry in feed.entries:
+        message_id = entry.get("id") or entry.get("link") or ""
+        if not message_id or article_exists(message_id):
+            continue
+
+        # Prefer full content, fall back to summary
+        raw_html = ""
+        if hasattr(entry, "content") and entry.content:
+            raw_html = entry.content[0].get("value", "")
+        if not raw_html:
+            raw_html = entry.get("summary", "")
+
+        body = ""
+        if raw_html:
+            soup = BeautifulSoup(raw_html, "lxml")
+            for tag in soup(["script", "style", "img", "nav", "footer"]):
+                tag.decompose()
+            body = re.sub(r"\n{3,}", "\n\n", soup.get_text(separator="\n")).strip()
+
+        # Parse date from feedparser's pre-parsed tuple (more reliable than raw string)
+        if getattr(entry, "published_parsed", None):
+            date = datetime(*entry.published_parsed[:6], tzinfo=timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+        else:
+            date = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+        article = {
+            "message_id": message_id,
+            "source":     name,
+            "subject":    entry.get("title", "(no title)"),
+            "date":       date,
+            "body":       body,
+            "from_addr":  url,
+        }
+        insert_article(article)
+
+        # Generate and cache summary immediately
+        try:
+            from backend.db import _conn as _db_conn
+            from backend.qa import summarize_article
+            with _db_conn() as c:
+                row = c.execute(
+                    "SELECT id FROM articles WHERE message_id = ?", (message_id,)
+                ).fetchone()
+            if row:
+                article["id"] = row["id"]
+                summarize_article(article, save=True)
+                log.info("Summarised RSS: [%s] %s", name, entry.get("title", "")[:60])
+        except Exception as exc:
+            log.warning("RSS summary failed for '%s': %s", entry.get("title", "")[:60], exc)
+
+        new_count += 1
+        log.info("Stored RSS: [%s] %s", name, entry.get("title", "")[:80])
+
+    return new_count
+
+
 def run_ingestor():
     cfg = load_config()
     init_db()
+    total = 0
+
+    # Gmail newsletters
     try:
         service = get_gmail_service()
+        total += fetch_and_store(service, cfg)
     except KeyError as e:
-        log.error("Missing env var: %s. Run gmail_auth.py first.", e)
-        return
-    n = fetch_and_store(service, cfg)
+        log.error("Missing Gmail env var: %s. Skipping Gmail.", e)
+    except Exception as e:
+        log.error("Gmail fetch failed: %s", e)
+
+    # RSS feeds
+    for feed_cfg in cfg.get("rss", {}).get("feeds", []):
+        try:
+            total += fetch_rss(feed_cfg)
+        except Exception as e:
+            log.error("RSS fetch failed for %s: %s", feed_cfg.get("name"), e)
+
     set_meta("last_sync_at", datetime.now(timezone.utc).isoformat())
-    log.info("Ingestion complete. %d new article(s) stored.", n)
+    log.info("Ingestion complete. %d new article(s) stored.", total)
 
 
 def main():

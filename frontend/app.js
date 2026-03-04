@@ -43,12 +43,14 @@ const SOURCE_COLORS = {
   semafor:   '#2dd4bf',  // teal
   bloomberg: '#60a5fa',  // blue
   safari:    '#fb923c',  // orange
+  techcabal: '#a78bfa',  // purple
 };
 function sourceColor(name = '') {
   const n = name.toLowerCase();
-  if (n.includes('semafor'))   return SOURCE_COLORS.semafor;
-  if (n.includes('bloomberg')) return SOURCE_COLORS.bloomberg;
-  if (n.includes('safari'))    return SOURCE_COLORS.safari;
+  if (n.includes('semafor'))               return SOURCE_COLORS.semafor;
+  if (n.includes('bloomberg'))             return SOURCE_COLORS.bloomberg;
+  if (n.includes('safari'))                return SOURCE_COLORS.safari;
+  if (n.includes('techcabal') || n.includes('tech cabal')) return SOURCE_COLORS.techcabal;
   return 'var(--accent)';
 }
 
