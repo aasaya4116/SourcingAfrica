@@ -128,6 +128,40 @@ def top5(refresh: bool = False):
     return {"stories": stories}
 
 
+@app.get("/api/top5/debug")
+def top5_debug():
+    """Diagnostic endpoint — exposes Claude raw output for top5."""
+    import json, os
+    from backend.db import get_articles_since, get_recent_articles
+    from backend.qa import TOP5_SYSTEM
+    articles = get_articles_since(14) or get_recent_articles(limit=50)
+    article_list = "\n".join(
+        f"{a['id']} | {a['source']} | {a['date'][:10]} | {a['subject']}"
+        for a in articles[:60]
+    )
+    api_key = os.environ.get("ANTHROPIC_API_KEY")
+    if not api_key:
+        return {"error": "no ANTHROPIC_API_KEY", "article_count": len(articles)}
+    import anthropic
+    client = anthropic.Anthropic(api_key=api_key)
+    try:
+        msg = client.messages.create(
+            model=os.environ.get("CLAUDE_MODEL", "claude-opus-4-6"),
+            max_tokens=300,
+            system=TOP5_SYSTEM,
+            messages=[{"role": "user", "content": f"Articles:\n{article_list}"}],
+        )
+        raw = msg.content[0].text.strip()
+        article_ids = [a["id"] for a in articles[:60]]
+        return {
+            "article_count": len(articles),
+            "article_ids": article_ids[:20],
+            "claude_raw": raw,
+        }
+    except Exception as exc:
+        return {"error": str(exc), "article_count": len(articles)}
+
+
 @app.get("/api/status")
 def status():
     return {
