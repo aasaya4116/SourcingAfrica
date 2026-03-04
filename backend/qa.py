@@ -45,18 +45,18 @@ def get_top5() -> list[dict]:
         return []
 
     article_list = "\n".join(
-        f"ID:{a['id']} | {a['source']} | {a['date'][:10]} | {a['subject']}"
+        f"{a['id']} | {a['source']} | {a['date'][:10]} | {a['subject']}"
         for a in articles[:60]
     )
 
     client = anthropic.Anthropic(api_key=api_key)
-    msg = client.messages.create(
-        model=os.environ.get("CLAUDE_MODEL", "claude-opus-4-6"),
-        max_tokens=300,
-        system=TOP5_SYSTEM,
-        messages=[{"role": "user", "content": f"Articles:\n{article_list}"}],
-    )
     try:
+        msg = client.messages.create(
+            model=os.environ.get("CLAUDE_MODEL", "claude-opus-4-6"),
+            max_tokens=300,
+            system=TOP5_SYSTEM,
+            messages=[{"role": "user", "content": f"Articles:\n{article_list}"}],
+        )
         raw = msg.content[0].text.strip()
         if raw.startswith("```"):
             raw = raw.split("```")[1]
