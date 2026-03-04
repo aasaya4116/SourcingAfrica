@@ -26,6 +26,7 @@
 
   <nav class="tab-bar">
     <button class="tab active" data-tab="ask">Ask</button>
+    <button class="tab" data-tab="top5">Top 5</button>
     <button class="tab" data-tab="feed">Recent</button>
   </nav>
 
@@ -59,6 +60,13 @@
           <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
         </svg>
       </button>
+    </div>
+  </main>
+
+  <!-- ── Top 5 tab ── -->
+  <main class="tab-content" id="tab-top5" hidden>
+    <div class="top5-list" id="top5List">
+      <div class="loading">Loading top stories…</div>
     </div>
   </main>
 

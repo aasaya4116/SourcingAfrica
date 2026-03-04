@@ -10,6 +10,82 @@ import anthropic
 from backend.db import get_recent_articles, get_articles_since, get_meta, set_meta
 
 
+TOP5_SYSTEM = """You are a news editor for Sourcing Africa, tracking African tech and business.
+
+Given a list of recent articles, select the 5 most significant and newsworthy stories.
+Return ONLY a JSON array of exactly 5 objects:
+[{"id": <integer>, "reason": "<why this matters, ≤ 15 words>"}, ...]
+
+Criteria:
+- Prioritise impact, novelty, and relevance to African tech or business
+- Vary sources and topics where possible
+- No markdown, valid JSON only"""
+
+
+def get_top5() -> list[dict]:
+    import json
+
+    # Return cached if < 6 hours old
+    cached  = get_meta("top5_json")
+    updated = get_meta("top5_updated_at")
+    if cached and updated:
+        try:
+            age = (datetime.now(timezone.utc) - datetime.fromisoformat(updated)).total_seconds()
+            if age < 21600:
+                return json.loads(cached)
+        except Exception:
+            pass
+
+    api_key = os.environ.get("ANTHROPIC_API_KEY")
+    if not api_key:
+        return []
+
+    articles = get_articles_since(14) or get_recent_articles(limit=50)
+    if not articles:
+        return []
+
+    article_list = "\n".join(
+        f"ID:{a['id']} | {a['source']} | {a['date'][:10]} | {a['subject']}"
+        for a in articles[:60]
+    )
+
+    client = anthropic.Anthropic(api_key=api_key)
+    msg = client.messages.create(
+        model=os.environ.get("CLAUDE_MODEL", "claude-opus-4-6"),
+        max_tokens=300,
+        system=TOP5_SYSTEM,
+        messages=[{"role": "user", "content": f"Articles:\n{article_list}"}],
+    )
+    try:
+        raw = msg.content[0].text.strip()
+        if raw.startswith("```"):
+            raw = raw.split("```")[1]
+            if raw.startswith("json"):
+                raw = raw[4:]
+        picks = json.loads(raw.strip())
+        if isinstance(picks, list):
+            article_map = {a["id"]: a for a in articles}
+            result = []
+            for p in picks[:5]:
+                aid = int(p.get("id", 0))
+                if aid in article_map:
+                    a = article_map[aid]
+                    result.append({
+                        "id":      aid,
+                        "source":  a["source"],
+                        "subject": a["subject"],
+                        "date":    a["date"],
+                        "reason":  p.get("reason", ""),
+                    })
+            if result:
+                set_meta("top5_json",       json.dumps(result))
+                set_meta("top5_updated_at", datetime.now(timezone.utc).isoformat())
+                return result
+    except Exception:
+        pass
+    return []
+
+
 SUMMARIZE_SYSTEM = """You are a concise analyst summarizing African tech and business newsletters.
 
 Given a newsletter, return ONLY a JSON object with this exact structure:

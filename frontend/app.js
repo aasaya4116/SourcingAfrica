@@ -105,6 +105,7 @@ document.querySelectorAll('.tab').forEach(btn => {
     el.hidden = false;
 
     if (tab === 'feed') loadFeed();
+    if (tab === 'top5') loadTop5();
   });
 });
 
@@ -267,6 +268,46 @@ function markRead(id) {
   const ids = getReadIds();
   ids.add(String(id));
   localStorage.setItem(READ_KEY, JSON.stringify([...ids]));
+}
+
+// ── Top 5 ─────────────────────────────────────────────────────────────────────
+
+async function loadTop5() {
+  const list = document.getElementById('top5List');
+  list.innerHTML = skeletonCards(5);
+
+  try {
+    const r = await fetch('/api/top5');
+    if (!r.ok) throw new Error('Failed');
+    const { stories } = await r.json();
+
+    if (!stories || !stories.length) {
+      list.innerHTML = '<div class="empty">Not enough articles yet — check back after the next sync.</div>';
+      return;
+    }
+
+    list.innerHTML = stories.map((s, i) => `
+      <div class="top5-card" data-id="${s.id}">
+        <div class="top5-rank">${i + 1}</div>
+        <div class="top5-body">
+          <div class="top5-meta">
+            <span class="top5-source" style="color:${sourceColor(s.source)}">${escHtml(s.source)}</span>
+            <span class="top5-date">${fmtDate(s.date)}</span>
+          </div>
+          <div class="top5-title">${escHtml(s.subject)}</div>
+          <div class="top5-reason">${escHtml(s.reason)}</div>
+        </div>
+      </div>`).join('');
+
+    list.querySelectorAll('.top5-card').forEach(card => {
+      card.addEventListener('click', () => {
+        markRead(card.dataset.id);
+        openArticle(card.dataset.id);
+      });
+    });
+  } catch {
+    list.innerHTML = '<div class="empty">Could not load top stories.</div>';
+  }
 }
 
 // ── Feed ──────────────────────────────────────────────────────────────────────

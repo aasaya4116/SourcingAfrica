@@ -13,7 +13,7 @@ from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
 from backend.db import init_db, get_recent_articles, get_sources, count_articles, get_meta
-from backend.qa import answer, summarize_article, backfill_summaries, generate_suggestions
+from backend.qa import answer, summarize_article, backfill_summaries, generate_suggestions, get_top5
 
 ROOT = Path(__file__).resolve().parent.parent
 FRONTEND_DIR = ROOT / "frontend"
@@ -116,6 +116,13 @@ def suggestions():
     """Return 4 dynamic question chips generated from the current archive."""
     chips = generate_suggestions()
     return {"suggestions": chips}
+
+
+@app.get("/api/top5")
+def top5():
+    """Return Claude-curated top 5 stories from the last 14 days (cached 6h)."""
+    stories = get_top5()
+    return {"stories": stories}
 
 
 @app.get("/api/status")
