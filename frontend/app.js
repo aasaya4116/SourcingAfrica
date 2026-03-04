@@ -13,10 +13,54 @@ function escHtml(str) {
 function timeAgo(isoString) {
   if (!isoString) return '';
   const diff = Math.floor((Date.now() - new Date(isoString).getTime()) / 1000);
-  if (diff < 60)   return 'just now';
-  if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
+  if (diff < 60)    return 'just now';
+  if (diff < 3600)  return `${Math.floor(diff / 60)}m ago`;
   if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
   return `${Math.floor(diff / 86400)}d ago`;
+}
+
+function fmtDate(isoStr) {
+  if (!isoStr) return '';
+  const d = new Date(isoStr);
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+}
+
+function dateGroup(isoStr) {
+  const art  = new Date(isoStr);
+  const now  = new Date();
+  const artDay = new Date(art.getFullYear(), art.getMonth(), art.getDate());
+  const today  = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const diff   = Math.round((today - artDay) / 86400000);
+  if (diff <= 0) return 'Today';
+  if (diff === 1) return 'Yesterday';
+  if (diff <= 7)  return 'This week';
+  if (diff <= 30) return 'This month';
+  return 'Earlier';
+}
+
+// Source → accent color
+const SOURCE_COLORS = {
+  semafor:   '#2dd4bf',  // teal
+  bloomberg: '#60a5fa',  // blue
+  safari:    '#fb923c',  // orange
+};
+function sourceColor(name = '') {
+  const n = name.toLowerCase();
+  if (n.includes('semafor'))   return SOURCE_COLORS.semafor;
+  if (n.includes('bloomberg')) return SOURCE_COLORS.bloomberg;
+  if (n.includes('safari'))    return SOURCE_COLORS.safari;
+  return 'var(--accent)';
+}
+
+function skeletonCards(n = 6) {
+  return Array(n).fill(0).map(() => `
+    <div class="skeleton-card">
+      <div class="skel skel-source"></div>
+      <div class="skel skel-title"></div>
+      <div class="skel skel-title2"></div>
+      <div class="skel skel-preview"></div>
+      <div class="skel skel-prev2"></div>
+    </div>`).join('');
 }
 
 // ── Status + freshness ────────────────────────────────────────────────────────
@@ -229,7 +273,7 @@ let currentSource = '';
 
 async function loadFeed(source = '') {
   const feed = document.getElementById('feed');
-  feed.innerHTML = '<div class="loading">Loading…</div>';
+  feed.innerHTML = skeletonCards(6);
 
   try {
     const url = `/api/articles?limit=30${source ? `&source=${encodeURIComponent(source)}` : ''}`;
@@ -254,27 +298,34 @@ function renderFeed(articles) {
   }
 
   const readIds = getReadIds();
+  let html = '';
+  let lastGroup = null;
 
-  feed.innerHTML = articles.map(a => {
+  articles.forEach(a => {
+    const group = dateGroup(a.date);
+    if (group !== lastGroup) {
+      html += `<div class="date-header">${group}</div>`;
+      lastGroup = group;
+    }
     const unread = !readIds.has(String(a.id));
-    return `
+    const color  = sourceColor(a.source);
+    html += `
       <div class="article-card" data-id="${a.id}">
         ${unread ? '<span class="unread-dot" aria-label="Unread"></span>' : ''}
-        <div class="article-source">
-          ${escHtml(a.source)}
-          <span class="article-date">${a.date}</span>
+        <div class="article-source" style="color:${color}">
+          ${escHtml(a.source)}<span class="article-date">${fmtDate(a.date)}</span>
         </div>
         <div class="article-title">${escHtml(a.subject)}</div>
         <div class="article-preview">${escHtml(a.preview)}</div>
-      </div>
-    `;
-  }).join('');
+      </div>`;
+  });
+
+  feed.innerHTML = html;
 
   feed.querySelectorAll('.article-card').forEach(card => {
     card.addEventListener('click', () => {
       const id = card.dataset.id;
       markRead(id);
-      // Remove unread dot immediately
       const dot = card.querySelector('.unread-dot');
       if (dot) dot.remove();
       openArticle(id);
@@ -291,7 +342,13 @@ async function buildFilters() {
       const btn = document.createElement('button');
       btn.className = 'filter-chip';
       btn.dataset.source = s;
-      btn.textContent = s;
+
+      // Colored dot before source name
+      const dot = document.createElement('span');
+      dot.style.cssText = `display:inline-block;width:6px;height:6px;border-radius:50%;background:${sourceColor(s)};margin-right:5px;vertical-align:middle`;
+      btn.appendChild(dot);
+      btn.appendChild(document.createTextNode(s));
+
       btn.addEventListener('click', () => setFilter(s, btn));
       bar.appendChild(btn);
     });
@@ -326,8 +383,10 @@ async function openArticle(id) {
     ]);
     const a = await metaRes.json();
 
-    document.getElementById('modalSource').textContent = a.source;
-    document.getElementById('modalDate').textContent   = a.date;
+    const srcEl = document.getElementById('modalSource');
+    srcEl.textContent = a.source;
+    srcEl.style.color = sourceColor(a.source);
+    document.getElementById('modalDate').textContent = fmtDate(a.date);
     document.getElementById('modalTitle').textContent  = a.subject;
 
     if (!summaryRes.ok) throw new Error('Summary failed');
