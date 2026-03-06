@@ -190,11 +190,11 @@ def fetch_and_store(service, cfg: dict) -> int:
         }
         insert_article(article)
 
-        # Generate and cache summary immediately after storing
+        # Generate and cache summary + tags immediately after storing
         try:
             import json as _json
             from backend.db import _conn as _db_conn
-            from backend.qa import summarize_article
+            from backend.qa import summarize_article, tag_article
             with _db_conn() as c:
                 row = c.execute(
                     "SELECT id FROM articles WHERE message_id = ?", (message_id,)
@@ -202,9 +202,10 @@ def fetch_and_store(service, cfg: dict) -> int:
             if row:
                 article["id"] = row["id"]
                 summarize_article(article, save=True)
-                log.info("Summarised: [%s] %s", source, subject[:60])
+                tag_article(article, save=True)
+                log.info("Summarised+tagged: [%s] %s", source, subject[:60])
         except Exception as exc:
-            log.warning("Summary failed for '%s': %s", subject[:60], exc)
+            log.warning("Summary/tag failed for '%s': %s", subject[:60], exc)
 
         new_count += 1
         log.info("Stored: [%s] %s", source, subject[:80])
@@ -284,10 +285,10 @@ def fetch_rss(feed_cfg: dict) -> int:
         }
         insert_article(article)
 
-        # Generate and cache summary immediately
+        # Generate and cache summary + tags immediately
         try:
             from backend.db import _conn as _db_conn
-            from backend.qa import summarize_article
+            from backend.qa import summarize_article, tag_article
             with _db_conn() as c:
                 row = c.execute(
                     "SELECT id FROM articles WHERE message_id = ?", (message_id,)
@@ -295,9 +296,10 @@ def fetch_rss(feed_cfg: dict) -> int:
             if row:
                 article["id"] = row["id"]
                 summarize_article(article, save=True)
-                log.info("Summarised RSS: [%s] %s", name, entry.get("title", "")[:60])
+                tag_article(article, save=True)
+                log.info("Summarised+tagged RSS: [%s] %s", name, entry.get("title", "")[:60])
         except Exception as exc:
-            log.warning("RSS summary failed for '%s': %s", entry.get("title", "")[:60], exc)
+            log.warning("RSS summary/tag failed for '%s': %s", entry.get("title", "")[:60], exc)
 
         new_count += 1
         log.info("Stored RSS: [%s] %s", name, entry.get("title", "")[:80])

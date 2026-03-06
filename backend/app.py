@@ -13,7 +13,7 @@ from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
 from backend.db import init_db, get_recent_articles, get_sources, count_articles, get_meta
-from backend.qa import answer, summarize_article, backfill_summaries, generate_suggestions, get_top5
+from backend.qa import answer, summarize_article, backfill_summaries, backfill_tags, generate_suggestions, get_top5
 
 ROOT = Path(__file__).resolve().parent.parent
 FRONTEND_DIR = ROOT / "frontend"
@@ -24,8 +24,10 @@ app = FastAPI(title="Sourcing Africa", docs_url=None, redoc_url=None)
 @app.on_event("startup")
 def startup():
     init_db()
-    # Backfill summaries for any articles that don't have one yet
-    thread = threading.Thread(target=backfill_summaries, daemon=True)
+    def _backfill():
+        backfill_summaries()
+        backfill_tags()
+    thread = threading.Thread(target=_backfill, daemon=True)
     thread.start()
 
 
@@ -55,21 +57,27 @@ def ask(req: QuestionRequest):
 
 @app.get("/api/articles")
 def articles(limit: int = 20, source: str | None = None):
+    import json as _json
     rows = get_recent_articles(limit=limit, source=source or None)
-    return {
-        "articles": [
-            {
-                "id":        r["id"],
-                "source":    r["source"],
-                "subject":   r["subject"],
-                "date":      r["date"][:10],
-                "preview":   r["body"][:200].strip() + "…",
-                "image_url": r["image_url"],
-            }
-            for r in rows
-        ],
-        "total": count_articles(),
-    }
+    result = []
+    for r in rows:
+        tags = {}
+        if r["tags_json"]:
+            try:
+                tags = _json.loads(r["tags_json"])
+            except Exception:
+                pass
+        result.append({
+            "id":        r["id"],
+            "source":    r["source"],
+            "subject":   r["subject"],
+            "date":      r["date"][:10],
+            "preview":   r["body"][:200].strip() + "…",
+            "image_url": r["image_url"],
+            "country":   tags.get("country"),
+            "topic":     tags.get("topic"),
+        })
+    return {"articles": result, "total": count_articles()}
 
 
 @app.get("/api/articles/{article_id}")
@@ -81,7 +89,14 @@ def article_detail(article_id: int):
         ).fetchone()
     if not row:
         raise HTTPException(status_code=404, detail="Article not found")
+    import json as _json
     r = dict(row)
+    tags = {}
+    if r["tags_json"]:
+        try:
+            tags = _json.loads(r["tags_json"])
+        except Exception:
+            pass
     return {
         "id":        r["id"],
         "source":    r["source"],
@@ -89,6 +104,8 @@ def article_detail(article_id: int):
         "date":      r["date"][:10],
         "body":      r["body"],
         "image_url": r["image_url"],
+        "country":   tags.get("country"),
+        "topic":     tags.get("topic"),
     }
 
 

@@ -35,7 +35,7 @@ def init_db():
         conn.execute("CREATE INDEX IF NOT EXISTS idx_date ON articles(date DESC)")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_source ON articles(source)")
         # Migrate existing DB — add columns if not present
-        for col in ("summary_json TEXT", "image_url TEXT"):
+        for col in ("summary_json TEXT", "image_url TEXT", "tags_json TEXT"):
             try:
                 conn.execute(f"ALTER TABLE articles ADD COLUMN {col}")
             except Exception:
@@ -105,6 +105,23 @@ def save_summary(article_id: int, summary_json: str):
             "UPDATE articles SET summary_json = ? WHERE id = ?",
             (summary_json, article_id)
         )
+
+
+def save_tags(article_id: int, tags_json: str):
+    with _conn() as conn:
+        conn.execute(
+            "UPDATE articles SET tags_json = ? WHERE id = ?",
+            (tags_json, article_id)
+        )
+
+
+def get_untagged(limit: int = 100) -> list[dict]:
+    with _conn() as conn:
+        rows = conn.execute(
+            "SELECT * FROM articles WHERE tags_json IS NULL ORDER BY date DESC LIMIT ?",
+            (limit,)
+        ).fetchall()
+        return [dict(r) for r in rows]
 
 
 def get_unsummarised(limit: int = 100) -> list[dict]:

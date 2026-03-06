@@ -10,7 +10,7 @@ import anthropic
 
 log = logging.getLogger(__name__)
 
-from backend.db import get_recent_articles, get_articles_since, get_meta, set_meta
+from backend.db import get_recent_articles, get_articles_since, get_meta, set_meta, save_tags, get_untagged
 
 
 TOP5_SYSTEM = """You are a news editor for Sourcing Africa, tracking African tech and business.
@@ -76,6 +76,12 @@ def get_top5() -> list[dict]:
                 aid = int(p.get("id", 0))
                 if aid in article_map:
                     a = article_map[aid]
+                    tags = {}
+                    if a.get("tags_json"):
+                        try:
+                            tags = json.loads(a["tags_json"])
+                        except Exception:
+                            pass
                     result.append({
                         "id":        aid,
                         "source":    a["source"],
@@ -83,6 +89,8 @@ def get_top5() -> list[dict]:
                         "date":      a["date"],
                         "reason":    p.get("reason", ""),
                         "image_url": a.get("image_url"),
+                        "country":   tags.get("country"),
+                        "topic":     tags.get("topic"),
                     })
                 else:
                     log.warning("get_top5: Claude picked id=%s not in article_map", aid)
@@ -215,6 +223,58 @@ def generate_suggestions() -> list[str]:
     except Exception:
         pass
     return []
+
+
+TAG_SYSTEM = """You extract geographic and topic tags from African tech/business news articles.
+Return ONLY valid JSON — no markdown, no explanation:
+{"country": "<primary African country, or 'Pan-Africa'>", "topic": "<one of: Fintech, Startups, Energy, Logistics, Policy, AI, Infrastructure, Telecom, E-commerce, Agriculture, Health, Media, Other>"}"""
+
+
+def tag_article(article: dict, save: bool = False) -> dict:
+    import json
+    if article.get("tags_json"):
+        try:
+            return json.loads(article["tags_json"])
+        except Exception:
+            pass
+
+    api_key = os.environ.get("ANTHROPIC_API_KEY")
+    if not api_key:
+        return {}
+
+    client = anthropic.Anthropic(api_key=api_key)
+    content = f"Title: {article['subject']}\n\n{article['body'][:600]}"
+    try:
+        msg = client.messages.create(
+            model=os.environ.get("CLAUDE_MODEL", "claude-opus-4-6"),
+            max_tokens=60,
+            system=TAG_SYSTEM,
+            messages=[{"role": "user", "content": content}],
+        )
+        raw = msg.content[0].text.strip()
+        if raw.startswith("```"):
+            raw = raw.split("```")[1]
+            if raw.startswith("json"):
+                raw = raw[4:]
+        result = json.loads(raw.strip())
+        if save and article.get("id"):
+            save_tags(article["id"], json.dumps(result))
+        return result
+    except Exception as exc:
+        log.warning("tag_article failed for '%s': %s", article.get("subject", "")[:60], exc)
+        return {}
+
+
+def backfill_tags():
+    """Generate tags for all articles that don't have them yet."""
+    articles = get_untagged(limit=100)
+    if not articles:
+        return
+    log.info("Backfilling tags for %d article(s)…", len(articles))
+    for a in articles:
+        result = tag_article(a, save=True)
+        if result:
+            log.info("Tagged: %s → %s/%s", a["subject"][:50], result.get("country"), result.get("topic"))
 
 
 def backfill_summaries():

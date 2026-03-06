@@ -67,6 +67,38 @@ function skeletonCards(n = 6) {
     </div>`).join('');
 }
 
+// ── Tags ──────────────────────────────────────────────────────────────────────
+
+const TOPIC_COLORS = {
+  fintech:        '#3b82f6',
+  startups:       '#22c55e',
+  energy:         '#f59e0b',
+  logistics:      '#14b8a6',
+  policy:         '#f87171',
+  government:     '#f87171',
+  ai:             '#a78bfa',
+  infrastructure: '#94a3b8',
+  telecom:        '#06b6d4',
+  'e-commerce':   '#8b5cf6',
+  agriculture:    '#84cc16',
+  health:         '#10b981',
+  media:          '#fb923c',
+  other:          '#6b7280',
+};
+
+function topicColor(topic = '') {
+  return TOPIC_COLORS[topic.toLowerCase()] || '#6b7280';
+}
+
+function tagBubbles(country, topic) {
+  if (!country && !topic) return '';
+  let html = '<div class="tag-row">';
+  if (country) html += `<span class="tag-bubble tag-country">${escHtml(country)}</span>`;
+  if (topic)   html += `<span class="tag-bubble tag-topic" style="background:${topicColor(topic)}22;color:${topicColor(topic)};border-color:${topicColor(topic)}44">${escHtml(topic)}</span>`;
+  html += '</div>';
+  return html;
+}
+
 function cardThumb(imageUrl, source, color) {
   if (imageUrl) {
     return `<div class="card-thumb"><img src="${escHtml(imageUrl)}" alt="" loading="lazy" onerror="this.parentElement.innerHTML='<span>${escHtml(source[0]?.toUpperCase()||'?')}</span>';this.parentElement.style.background='${color}'"></div>`;
@@ -305,6 +337,7 @@ async function loadTop5() {
           </div>
           <div class="top5-title">${escHtml(s.subject)}</div>
           <div class="top5-reason">${escHtml(s.reason)}</div>
+          ${tagBubbles(s.country, s.topic)}
         </div>
         ${cardThumb(s.image_url, s.source, sourceColor(s.source))}
       </div>`).join('');
@@ -372,6 +405,7 @@ function renderFeed(articles) {
             </div>
             <div class="article-title">${escHtml(a.subject)}</div>
             <div class="article-preview">${escHtml(a.preview)}</div>
+            ${tagBubbles(a.country, a.topic)}
           </div>
           ${cardThumb(a.image_url, a.source, color)}
         </div>
@@ -458,6 +492,8 @@ async function openArticle(id) {
     } else {
       hero.hidden = true;
     }
+
+    document.getElementById('modalTags').innerHTML = tagBubbles(a.country, a.topic);
 
     if (!summaryRes.ok) throw new Error('Summary failed');
     const s = await summaryRes.json();
