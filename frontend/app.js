@@ -381,12 +381,16 @@ async function buildFilters() {
     const r = await fetch('/api/sources');
     const { sources } = await r.json();
     const bar = document.querySelector('.filter-bar');
+
+    // Wire up the existing "All" button
+    const allBtn = bar.querySelector('[data-source=""]');
+    if (allBtn) allBtn.addEventListener('click', () => setFilter('', allBtn));
+
     sources.forEach(s => {
       const btn = document.createElement('button');
       btn.className = 'filter-chip';
       btn.dataset.source = s;
 
-      // Colored dot before source name
       const dot = document.createElement('span');
       dot.style.cssText = `display:inline-block;width:6px;height:6px;border-radius:50%;background:${sourceColor(s)};margin-right:5px;vertical-align:middle`;
       btn.appendChild(dot);
@@ -459,3 +463,4 @@ modalOverlay.addEventListener('click', e => {
 
 checkStatus();
 loadSuggestions();
+loadTop5();

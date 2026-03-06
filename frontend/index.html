@@ -25,13 +25,13 @@
   </header>
 
   <nav class="tab-bar">
-    <button class="tab active" data-tab="ask">Ask</button>
-    <button class="tab" data-tab="top5">Top 5</button>
+    <button class="tab active" data-tab="top5">Top 5</button>
+    <button class="tab" data-tab="ask">Ask</button>
     <button class="tab" data-tab="feed">Recent</button>
   </nav>
 
   <!-- ── Ask tab ── -->
-  <main class="tab-content active" id="tab-ask">
+  <main class="tab-content" id="tab-ask" hidden>
     <div class="chat-messages" id="chatMessages">
       <!-- Shown when chat is empty -->
       <div class="welcome" id="suggestionsBox">
@@ -64,7 +64,7 @@
   </main>
 
   <!-- ── Top 5 tab ── -->
-  <main class="tab-content" id="tab-top5" hidden>
+  <main class="tab-content active" id="tab-top5">
     <div class="top5-list" id="top5List">
       <div class="loading">Loading top stories…</div>
     </div>
