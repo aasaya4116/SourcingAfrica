@@ -256,13 +256,15 @@ header {
 }
 .top5-card {
   display: flex;
-  gap: 14px;
+  gap: 12px;
   padding: 16px;
   border-bottom: 1px solid var(--border);
   cursor: pointer;
   transition: background 0.15s;
+  align-items: flex-start;
 }
 .top5-card:active { background: #1a1a1a; }
+.top5-card .card-thumb { align-self: center; }
 .top5-rank {
   font-size: 1.75rem;
   font-weight: 800;
@@ -338,6 +340,29 @@ header {
   padding: 0 0 calc(16px + var(--safe-bot));
 }
 
+/* ── Card thumbnail ─────────────────────────────────────────────────── */
+.card-thumb {
+  width: 68px;
+  height: 68px;
+  border-radius: 8px;
+  flex-shrink: 0;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0.85;
+}
+.card-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.card-thumb span {
+  font-size: 1.5rem;
+  font-weight: 800;
+  color: rgba(0,0,0,0.45);
+}
+
 .article-card {
   padding: 14px 16px;
   border-bottom: 1px solid var(--border);
@@ -346,6 +371,13 @@ header {
   position: relative;
 }
 .article-card:active { background: #1a1a1a; }
+
+.card-row {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+}
+.card-text { flex: 1; min-width: 0; }
 
 /* Unread dot */
 .unread-dot {
@@ -415,6 +447,12 @@ header {
   padding: 14px 16px;
   border-bottom: 1px solid var(--border);
   display: flex;
+  gap: 12px;
+  align-items: flex-start;
+}
+.skel-text {
+  flex: 1;
+  display: flex;
   flex-direction: column;
   gap: 9px;
 }
@@ -428,7 +466,7 @@ header {
 .skel-title   { width: 92%;   height: 13px; }
 .skel-title2  { width: 68%;   height: 13px; }
 .skel-preview { width: 100%;  height: 9px; }
-.skel-prev2   { width: 80%;   height: 9px; }
+.skel-thumb   { width: 68px; height: 68px; border-radius: 8px; flex-shrink: 0; }
 
 .loading {
   padding: 32px 16px;
@@ -492,6 +530,13 @@ header {
   display: flex;
   align-items: center;
   justify-content: center;
+}
+.modal-hero {
+  width: 100%;
+  height: 180px;
+  background-size: cover;
+  background-position: center;
+  flex-shrink: 0;
 }
 .modal-title {
   font-size: 1rem;

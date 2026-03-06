@@ -59,11 +59,12 @@ def articles(limit: int = 20, source: str | None = None):
     return {
         "articles": [
             {
-                "id":      r["id"],
-                "source":  r["source"],
-                "subject": r["subject"],
-                "date":    r["date"][:10],
-                "preview": r["body"][:200].strip() + "…",
+                "id":        r["id"],
+                "source":    r["source"],
+                "subject":   r["subject"],
+                "date":      r["date"][:10],
+                "preview":   r["body"][:200].strip() + "…",
+                "image_url": r["image_url"],
             }
             for r in rows
         ],
@@ -82,11 +83,12 @@ def article_detail(article_id: int):
         raise HTTPException(status_code=404, detail="Article not found")
     r = dict(row)
     return {
-        "id":       r["id"],
-        "source":   r["source"],
-        "subject":  r["subject"],
-        "date":     r["date"][:10],
-        "body":     r["body"],
+        "id":        r["id"],
+        "source":    r["source"],
+        "subject":   r["subject"],
+        "date":      r["date"][:10],
+        "body":      r["body"],
+        "image_url": r["image_url"],
     }
 
 

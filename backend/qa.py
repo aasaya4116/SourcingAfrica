@@ -77,11 +77,12 @@ def get_top5() -> list[dict]:
                 if aid in article_map:
                     a = article_map[aid]
                     result.append({
-                        "id":      aid,
-                        "source":  a["source"],
-                        "subject": a["subject"],
-                        "date":    a["date"],
-                        "reason":  p.get("reason", ""),
+                        "id":        aid,
+                        "source":    a["source"],
+                        "subject":   a["subject"],
+                        "date":      a["date"],
+                        "reason":    p.get("reason", ""),
+                        "image_url": a.get("image_url"),
                     })
                 else:
                     log.warning("get_top5: Claude picked id=%s not in article_map", aid)

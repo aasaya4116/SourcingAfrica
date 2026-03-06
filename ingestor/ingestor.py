@@ -212,6 +212,31 @@ def fetch_and_store(service, cfg: dict) -> int:
     return new_count
 
 
+def extract_rss_image(entry, raw_html: str) -> str | None:
+    """Pull the best image URL from an RSS entry."""
+    # 1. media:thumbnail (most common in modern feeds)
+    for t in getattr(entry, "media_thumbnail", []):
+        if t.get("url", "").startswith("http"):
+            return t["url"]
+    # 2. media:content with image type
+    for mc in getattr(entry, "media_content", []):
+        url = mc.get("url", "")
+        mime = mc.get("type", "")
+        if url.startswith("http") and (mime.startswith("image/") or url.rsplit(".", 1)[-1] in ("jpg", "jpeg", "png", "webp")):
+            return url
+    # 3. enclosures
+    for enc in getattr(entry, "enclosures", []):
+        if enc.get("type", "").startswith("image/"):
+            return enc.get("href") or enc.get("url")
+    # 4. First <img> in raw HTML
+    if raw_html:
+        soup = BeautifulSoup(raw_html, "lxml")
+        img = soup.find("img", src=True)
+        if img and str(img["src"]).startswith("http"):
+            return img["src"]
+    return None
+
+
 def fetch_rss(feed_cfg: dict) -> int:
     """Fetch new articles from a single RSS feed and store them."""
     url  = feed_cfg["url"]
@@ -233,6 +258,8 @@ def fetch_rss(feed_cfg: dict) -> int:
         if not raw_html:
             raw_html = entry.get("summary", "")
 
+        image_url = extract_rss_image(entry, raw_html)
+
         body = ""
         if raw_html:
             soup = BeautifulSoup(raw_html, "lxml")
@@ -253,6 +280,7 @@ def fetch_rss(feed_cfg: dict) -> int:
             "date":       date,
             "body":       body,
             "from_addr":  url,
+            "image_url":  image_url,
         }
         insert_article(article)
 

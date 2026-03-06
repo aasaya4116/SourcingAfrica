@@ -57,12 +57,21 @@ function sourceColor(name = '') {
 function skeletonCards(n = 6) {
   return Array(n).fill(0).map(() => `
     <div class="skeleton-card">
-      <div class="skel skel-source"></div>
-      <div class="skel skel-title"></div>
-      <div class="skel skel-title2"></div>
-      <div class="skel skel-preview"></div>
-      <div class="skel skel-prev2"></div>
+      <div class="skel-text">
+        <div class="skel skel-source"></div>
+        <div class="skel skel-title"></div>
+        <div class="skel skel-title2"></div>
+        <div class="skel skel-preview"></div>
+      </div>
+      <div class="skel skel-thumb"></div>
     </div>`).join('');
+}
+
+function cardThumb(imageUrl, source, color) {
+  if (imageUrl) {
+    return `<div class="card-thumb"><img src="${escHtml(imageUrl)}" alt="" loading="lazy" onerror="this.parentElement.innerHTML='<span>${escHtml(source[0]?.toUpperCase()||'?')}</span>';this.parentElement.style.background='${color}'"></div>`;
+  }
+  return `<div class="card-thumb" style="background:${color}"><span>${escHtml(source[0]?.toUpperCase() || '?')}</span></div>`;
 }
 
 // ── Status + freshness ────────────────────────────────────────────────────────
@@ -297,6 +306,7 @@ async function loadTop5() {
           <div class="top5-title">${escHtml(s.subject)}</div>
           <div class="top5-reason">${escHtml(s.reason)}</div>
         </div>
+        ${cardThumb(s.image_url, s.source, sourceColor(s.source))}
       </div>`).join('');
 
     list.querySelectorAll('.top5-card').forEach(card => {
@@ -355,11 +365,16 @@ function renderFeed(articles) {
     html += `
       <div class="article-card" data-id="${a.id}">
         ${unread ? '<span class="unread-dot" aria-label="Unread"></span>' : ''}
-        <div class="article-source" style="color:${color}">
-          ${escHtml(a.source)}<span class="article-date">${fmtDate(a.date)}</span>
+        <div class="card-row">
+          <div class="card-text">
+            <div class="article-source" style="color:${color}">
+              ${escHtml(a.source)}<span class="article-date">${fmtDate(a.date)}</span>
+            </div>
+            <div class="article-title">${escHtml(a.subject)}</div>
+            <div class="article-preview">${escHtml(a.preview)}</div>
+          </div>
+          ${cardThumb(a.image_url, a.source, color)}
         </div>
-        <div class="article-title">${escHtml(a.subject)}</div>
-        <div class="article-preview">${escHtml(a.preview)}</div>
       </div>`;
   });
 
@@ -433,8 +448,16 @@ async function openArticle(id) {
     const srcEl = document.getElementById('modalSource');
     srcEl.textContent = a.source;
     srcEl.style.color = sourceColor(a.source);
-    document.getElementById('modalDate').textContent = fmtDate(a.date);
-    document.getElementById('modalTitle').textContent  = a.subject;
+    document.getElementById('modalDate').textContent  = fmtDate(a.date);
+    document.getElementById('modalTitle').textContent = a.subject;
+
+    const hero = document.getElementById('modalHero');
+    if (a.image_url) {
+      hero.style.backgroundImage = `url(${a.image_url})`;
+      hero.hidden = false;
+    } else {
+      hero.hidden = true;
+    }
 
     if (!summaryRes.ok) throw new Error('Summary failed');
     const s = await summaryRes.json();

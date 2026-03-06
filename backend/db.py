@@ -28,16 +28,18 @@ def init_db():
                 body         TEXT NOT NULL,
                 from_addr    TEXT,
                 summary_json TEXT,
+                image_url    TEXT,
                 ingested_at  TEXT NOT NULL DEFAULT (datetime('now'))
             )
         """)
         conn.execute("CREATE INDEX IF NOT EXISTS idx_date ON articles(date DESC)")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_source ON articles(source)")
-        # Migrate existing DB — add column if not present
-        try:
-            conn.execute("ALTER TABLE articles ADD COLUMN summary_json TEXT")
-        except Exception:
-            pass
+        # Migrate existing DB — add columns if not present
+        for col in ("summary_json TEXT", "image_url TEXT"):
+            try:
+                conn.execute(f"ALTER TABLE articles ADD COLUMN {col}")
+            except Exception:
+                pass
         conn.execute("""
             CREATE TABLE IF NOT EXISTS meta (
                 key   TEXT PRIMARY KEY,
@@ -58,10 +60,10 @@ def insert_article(a: dict):
     with _conn() as conn:
         conn.execute("""
             INSERT OR IGNORE INTO articles
-                (message_id, source, subject, date, body, from_addr)
+                (message_id, source, subject, date, body, from_addr, image_url)
             VALUES
-                (:message_id, :source, :subject, :date, :body, :from_addr)
-        """, a)
+                (:message_id, :source, :subject, :date, :body, :from_addr, :image_url)
+        """, {**a, "image_url": a.get("image_url")})
 
 
 def get_recent_articles(limit: int = 40, source: str | None = None) -> list[dict]:
