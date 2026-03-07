@@ -21,7 +21,8 @@ Return ONLY a JSON array of exactly 5 objects:
 
 Criteria:
 - Prioritise impact, novelty, and relevance to African tech or business
-- Vary sources and topics where possible
+- HARD RULE: No more than 2 stories from the same source
+- Vary topics across the 5 picks (no two stories on the same theme)
 - No markdown, valid JSON only"""
 
 
