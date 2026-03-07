@@ -13,7 +13,7 @@ from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
 from backend.db import init_db, get_recent_articles, get_sources, count_articles, get_meta
-from backend.qa import answer, summarize_article, backfill_summaries, backfill_tags, generate_suggestions, get_top5
+from backend.qa import answer, summarize_article, backfill_summaries, backfill_tags, backfill_stories, generate_suggestions, get_top5
 
 ROOT = Path(__file__).resolve().parent.parent
 FRONTEND_DIR = ROOT / "frontend"
@@ -25,8 +25,9 @@ app = FastAPI(title="Sourcing Africa", docs_url=None, redoc_url=None)
 def startup():
     init_db()
     def _backfill():
-        backfill_summaries()
-        backfill_tags()
+        backfill_stories()   # Split newsletter digests into individual stories first
+        backfill_summaries() # Summarise any unsummarised stories
+        backfill_tags()      # Tag any untagged stories
     thread = threading.Thread(target=_backfill, daemon=True)
     thread.start()
 

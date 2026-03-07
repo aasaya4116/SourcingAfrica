@@ -10,19 +10,28 @@ import anthropic
 
 log = logging.getLogger(__name__)
 
-from backend.db import get_recent_articles, get_articles_since, get_meta, set_meta, save_tags, get_untagged
+from backend.db import (
+    get_recent_articles, get_articles_since, get_meta, set_meta,
+    save_tags, get_untagged, get_unextracted_newsletters, mark_as_digest,
+    insert_article,
+)
 
 
-TOP5_SYSTEM = """You are a news editor for Sourcing Africa, tracking African tech and business.
+TOP5_SYSTEM = """You are a signal analyst for Sourcing Africa using the ADE Framework to rank African tech and business stories.
 
-Given a list of recent articles, select the 5 most significant and newsworthy stories.
+The ADE Framework scores each article on three dimensions (1–10 each):
+- AUTOMATION: Does this story reveal an efficiency gain, tech adoption, or process transformation?
+- DISCOVERY: Does this story cover a startup launch, funding round, new market entrant, or product release?
+- EMERGENCE: Does this story signal a macro shift — policy change, infrastructure build-out, sector-wide trend, or geopolitical move?
+
+Given a list of articles, score each on all three ADE dimensions, then select the 5 with the highest combined ADE score.
+
 Return ONLY a JSON array of exactly 5 objects:
-[{"id": <integer>, "reason": "<why this matters, ≤ 15 words>"}, ...]
+[{"id": <integer>, "ade_tag": "<strongest signal: AUTOMATION | DISCOVERY | EMERGENCE>", "ade_score": <total 1-30>, "reason": "<what ADE signal this story carries, ≤ 15 words>"}, ...]
 
-Criteria:
-- Prioritise impact, novelty, and relevance to African tech or business
+Rules:
 - HARD RULE: No more than 2 stories from the same source
-- Vary topics across the 5 picks (no two stories on the same theme)
+- HARD RULE: No two stories on the same theme
 - No markdown, valid JSON only"""
 
 
@@ -89,6 +98,8 @@ def get_top5() -> list[dict]:
                         "subject":   a["subject"],
                         "date":      a["date"],
                         "reason":    p.get("reason", ""),
+                        "ade_tag":   p.get("ade_tag", ""),
+                        "ade_score": p.get("ade_score", 0),
                         "image_url": a.get("image_url"),
                         "country":   tags.get("country"),
                         "topic":     tags.get("topic"),
@@ -264,6 +275,99 @@ def tag_article(article: dict, save: bool = False) -> dict:
     except Exception as exc:
         log.warning("tag_article failed for '%s': %s", article.get("subject", "")[:60], exc)
         return {}
+
+
+EXTRACT_STORIES_SYSTEM = """You extract individual news stories from African newsletter digests.
+
+Given a newsletter body, identify and return each distinct story it contains.
+Return ONLY a JSON array:
+[{"headline": "<concise story title, ≤ 12 words>", "body": "<story text, max 400 words>"}, ...]
+
+Rules:
+- Each element = ONE story (one event, one company, one policy move, one data point)
+- Do not combine unrelated items into one entry
+- Skip boilerplate: ads, subscription CTAs, unsubscribe links, navigation menus
+- Return 2–8 stories per newsletter
+- No markdown, valid JSON only"""
+
+
+def extract_stories(article: dict) -> list[dict]:
+    """Split a newsletter article into individual story dicts ready for insert_article."""
+    import json
+
+    api_key = os.environ.get("ANTHROPIC_API_KEY")
+    if not api_key:
+        return []
+
+    client = anthropic.Anthropic(api_key=api_key)
+    content = f"Source: {article['source']}\nDate: {article['date'][:10]}\n\n{article['body'][:6000]}"
+    try:
+        msg = client.messages.create(
+            model=os.environ.get("CLAUDE_MODEL", "claude-opus-4-6"),
+            max_tokens=2000,
+            system=EXTRACT_STORIES_SYSTEM,
+            messages=[{"role": "user", "content": content}],
+        )
+        raw = msg.content[0].text.strip()
+        if raw.startswith("```"):
+            raw = raw.split("```")[1]
+            if raw.startswith("json"):
+                raw = raw[4:]
+        stories = json.loads(raw.strip())
+        if not isinstance(stories, list):
+            return []
+        parent_id = article.get("id")
+        result = []
+        for i, s in enumerate(stories):
+            headline = s.get("headline", "").strip()
+            body = s.get("body", "").strip()
+            if not headline or not body:
+                continue
+            result.append({
+                "message_id": f"story:{parent_id}:{i}",
+                "source":     article["source"],
+                "subject":    headline,
+                "date":       article["date"],
+                "body":       body,
+                "from_addr":  article.get("from_addr", ""),
+                "image_url":  article.get("image_url"),
+                "parent_id":  parent_id,
+            })
+        return result
+    except Exception as exc:
+        log.error("extract_stories failed for '%s': %s", article.get("subject", "")[:60], exc)
+        return []
+
+
+def backfill_stories():
+    """Split all unextracted newsletter digests into individual story articles."""
+    from backend.db import _conn
+
+    newsletters = get_unextracted_newsletters(limit=20)
+    if not newsletters:
+        return
+    log.info("Extracting stories from %d newsletter(s)…", len(newsletters))
+    for newsletter in newsletters:
+        stories = extract_stories(newsletter)
+        if stories:
+            for s in stories:
+                insert_article(s)
+                try:
+                    with _conn() as c:
+                        row = c.execute(
+                            "SELECT id FROM articles WHERE message_id = ?", (s["message_id"],)
+                        ).fetchone()
+                    if row:
+                        s["id"] = row["id"]
+                        tag_article(s, save=True)
+                except Exception:
+                    pass
+            mark_as_digest(newsletter["id"])
+            log.info("Extracted %d stories from: %s", len(stories), newsletter["subject"][:60])
+        else:
+            # Mark as digest to avoid re-processing
+            mark_as_digest(newsletter["id"])
+            log.warning("No stories extracted from: %s", newsletter["subject"][:60])
 
 
 def backfill_tags():

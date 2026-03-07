@@ -302,7 +302,21 @@ header {
   font-size: 0.78rem;
   color: var(--muted);
   line-height: 1.45;
-  font-style: italic;
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.ade-badge {
+  flex-shrink: 0;
+  font-size: 0.62rem;
+  font-weight: 700;
+  font-style: normal;
+  letter-spacing: 0.06em;
+  padding: 2px 6px;
+  border-radius: 4px;
+  border: 1px solid;
+  text-transform: uppercase;
 }
 
 /* ── Feed tab ──────────────────────────────────────────────────────── */

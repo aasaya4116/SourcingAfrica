@@ -67,6 +67,21 @@ function skeletonCards(n = 6) {
     </div>`).join('');
 }
 
+// ── ADE tags ──────────────────────────────────────────────────────────────────
+
+const ADE_COLORS = {
+  automation: { bg: '#0e7490', text: '#67e8f9', border: '#0891b2' },
+  discovery:  { bg: '#166534', text: '#86efac', border: '#16a34a' },
+  emergence:  { bg: '#92400e', text: '#fcd34d', border: '#d97706' },
+};
+
+function adeBadge(tag) {
+  if (!tag) return '';
+  const key = tag.toLowerCase();
+  const c = ADE_COLORS[key] || { bg: '#1f2937', text: '#9ca3af', border: '#374151' };
+  return `<span class="ade-badge" style="background:${c.bg}22;color:${c.text};border-color:${c.border}44">${escHtml(tag)}</span>`;
+}
+
 // ── Tags ──────────────────────────────────────────────────────────────────────
 
 const TOPIC_COLORS = {
@@ -336,7 +351,7 @@ async function loadTop5() {
             <span class="top5-date">${fmtDate(s.date)}</span>
           </div>
           <div class="top5-title">${escHtml(s.subject)}</div>
-          <div class="top5-reason">${escHtml(s.reason)}</div>
+          <div class="top5-reason">${adeBadge(s.ade_tag)}<span style="font-style:italic">${escHtml(s.reason)}</span></div>
           ${tagBubbles(s.country, s.topic)}
         </div>
         ${cardThumb(s.image_url, s.source, sourceColor(s.source))}
