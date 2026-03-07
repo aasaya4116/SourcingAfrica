@@ -150,6 +150,28 @@ def top5(refresh: bool = False):
 
 
 
+@app.get("/api/debug/stories")
+def debug_stories():
+    from backend.db import _conn
+    with _conn() as conn:
+        total     = conn.execute("SELECT COUNT(*) FROM articles").fetchone()[0]
+        digests   = conn.execute("SELECT COUNT(*) FROM articles WHERE is_digest = 1").fetchone()[0]
+        children  = conn.execute("SELECT COUNT(*) FROM articles WHERE parent_id IS NOT NULL").fetchone()[0]
+        unextracted = conn.execute(
+            "SELECT COUNT(*) FROM articles WHERE parent_id IS NULL AND (is_digest IS NULL OR is_digest = 0) AND length(body) > 2000"
+        ).fetchone()[0]
+        sample = conn.execute(
+            "SELECT id, source, subject, is_digest, parent_id, length(body) as body_len FROM articles ORDER BY id DESC LIMIT 10"
+        ).fetchall()
+    return {
+        "total": total,
+        "digests_marked": digests,
+        "child_stories": children,
+        "unextracted_newsletters": unextracted,
+        "recent_10": [dict(r) for r in sample],
+    }
+
+
 @app.get("/api/status")
 def status():
     return {
