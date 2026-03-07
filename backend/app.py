@@ -150,6 +150,42 @@ def top5(refresh: bool = False):
 
 
 
+@app.post("/api/admin/extract")
+def trigger_extract():
+    """Manually trigger story extraction — runs synchronously on next 5 newsletters, returns result."""
+    import traceback
+    from backend.db import get_unextracted_newsletters, mark_as_digest, insert_article as _insert, _conn
+    from backend.qa import extract_stories, tag_article
+
+    newsletters = get_unextracted_newsletters(limit=5)
+    if not newsletters:
+        return {"message": "Nothing to extract", "processed": 0}
+
+    results = []
+    for nl in newsletters:
+        try:
+            stories = extract_stories(nl)
+            if stories:
+                for s in stories:
+                    _insert(s)
+                    try:
+                        with _conn() as c:
+                            row = c.execute("SELECT id FROM articles WHERE message_id = ?", (s["message_id"],)).fetchone()
+                        if row:
+                            s["id"] = row["id"]
+                            tag_article(s, save=True)
+                    except Exception:
+                        pass
+                mark_as_digest(nl["id"])
+                results.append({"id": nl["id"], "subject": nl["subject"][:60], "stories": len(stories)})
+            else:
+                mark_as_digest(nl["id"])
+                results.append({"id": nl["id"], "subject": nl["subject"][:60], "stories": 0, "note": "extraction returned empty"})
+        except Exception as exc:
+            results.append({"id": nl["id"], "subject": nl["subject"][:60], "error": traceback.format_exc()})
+    return {"processed": len(results), "results": results}
+
+
 @app.get("/api/debug/stories")
 def debug_stories():
     from backend.db import _conn

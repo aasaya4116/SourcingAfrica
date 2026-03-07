@@ -304,7 +304,7 @@ def extract_stories(article: dict) -> list[dict]:
     try:
         msg = client.messages.create(
             model=os.environ.get("CLAUDE_MODEL", "claude-opus-4-6"),
-            max_tokens=2000,
+            max_tokens=4000,
             system=EXTRACT_STORIES_SYSTEM,
             messages=[{"role": "user", "content": content}],
         )
