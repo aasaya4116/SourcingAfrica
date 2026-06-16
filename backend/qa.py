@@ -341,7 +341,7 @@ def extract_stories(article: dict) -> list[dict]:
 
 def backfill_stories():
     """Split all unextracted newsletter digests into individual story articles."""
-    from backend.db import _conn
+    from backend.db import get_article_id
 
     newsletters = get_unextracted_newsletters(limit=20)
     if not newsletters:
@@ -353,12 +353,9 @@ def backfill_stories():
             for s in stories:
                 insert_article(s)
                 try:
-                    with _conn() as c:
-                        row = c.execute(
-                            "SELECT id FROM articles WHERE message_id = ?", (s["message_id"],)
-                        ).fetchone()
-                    if row:
-                        s["id"] = row["id"]
+                    article_id = get_article_id(s["message_id"])
+                    if article_id:
+                        s["id"] = article_id
                         tag_article(s, save=True)
                 except Exception:
                     pass

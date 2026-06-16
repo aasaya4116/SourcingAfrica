@@ -71,6 +71,14 @@ def article_exists(message_id: str) -> bool:
             return cur.fetchone() is not None
 
 
+def get_article_id(message_id: str) -> int | None:
+    with _conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute("SELECT id FROM articles WHERE message_id = %s", (message_id,))
+            row = cur.fetchone()
+            return row[0] if row else None
+
+
 def insert_article(a: dict):
     with _conn() as conn:
         with conn.cursor() as cur:
@@ -82,6 +90,14 @@ def insert_article(a: dict):
                      %(from_addr)s, %(image_url)s, %(parent_id)s)
                 ON CONFLICT (message_id) DO NOTHING
             """, {**a, "image_url": a.get("image_url"), "parent_id": a.get("parent_id")})
+
+
+def get_article_by_id(article_id: int) -> dict | None:
+    with _conn() as conn:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute("SELECT * FROM articles WHERE id = %s", (article_id,))
+            row = cur.fetchone()
+            return dict(row) if row else None
 
 
 def get_recent_articles(limit: int = 40, source: str | None = None) -> list[dict]:
@@ -186,6 +202,34 @@ def count_articles() -> int:
         with conn.cursor() as cur:
             cur.execute("SELECT COUNT(*) FROM articles")
             return cur.fetchone()[0]
+
+
+def debug_stats() -> dict:
+    with _conn() as conn:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute("SELECT COUNT(*) AS n FROM articles")
+            total = cur.fetchone()["n"]
+            cur.execute("SELECT COUNT(*) AS n FROM articles WHERE is_digest = 1")
+            digests = cur.fetchone()["n"]
+            cur.execute("SELECT COUNT(*) AS n FROM articles WHERE parent_id IS NOT NULL")
+            children = cur.fetchone()["n"]
+            cur.execute(
+                "SELECT COUNT(*) AS n FROM articles WHERE parent_id IS NULL "
+                "AND (is_digest IS NULL OR is_digest = 0) AND length(body) > 2000"
+            )
+            unextracted = cur.fetchone()["n"]
+            cur.execute(
+                "SELECT id, source, subject, is_digest, parent_id, length(body) AS body_len "
+                "FROM articles ORDER BY id DESC LIMIT 10"
+            )
+            sample = [dict(r) for r in cur.fetchall()]
+    return {
+        "total": total,
+        "digests_marked": digests,
+        "child_stories": children,
+        "unextracted_newsletters": unextracted,
+        "recent_10": sample,
+    }
 
 
 def get_meta(key: str) -> str | None:

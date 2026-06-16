@@ -1,6 +1,6 @@
 # SourcingAfrica — African Tech Intelligence Pipeline
 
-An automated intelligence system that tracks African technology and macro trends using the ADE framework (Automation, Discovery, Emergence). Aggregates news from leading African tech sources, deduplicates, and generates AI-tagged briefs and podcast hooks on demand.
+An automated intelligence system that tracks African technology and macro trends using the ADE framework (Automation, Discovery, Emergence). Aggregates news from across the open web, deduplicates, enriches each story with Claude, and serves it as a browsable feed plus on-demand Q&A.
 
 ---
 
@@ -12,23 +12,18 @@ African tech ecosystems — from Lagos to Nairobi to Cairo — generate signific
 
 ## Architecture
 
-The system runs as a three-stage pipeline:
-
 ```
-RSS Feeds → Ingestor → Ledger (Google Docs) → Analyst (Claude AI) → Outputs
+RSS feeds + GDELT  →  Ingestor  →  Supabase (Postgres)  →  Claude enrichment  →  FastAPI + PWA
 ```
 
-**Stage 1 — Ingestor**
-Polls RSS feeds from TechCabal, Techpoint, and Disrupt Africa every 6 hours. Deduplicates articles by URL and stores them in a local JSON ledger.
+**Stage 1 — Ingestor** (`ingestor/ingestor.py`)
+Polls a configurable set of African tech/business RSS feeds plus the GDELT global news index every few hours. Deduplicates by URL / entry ID and stores raw articles in Supabase.
 
-**Stage 2 — Ledger**
-A Google Apps Script webhook syncs the local ledger to Google Docs, creating a centralized, human-readable source document.
+**Stage 2 — Enrichment** (`backend/qa.py`)
+Claude summarises each full-text article (summary, takeaways, "so what"), tags it by country and topic, and splits long newsletter digests into individual stories. GDELT headlines are tagged by source country for free (no model call) and shown as link-outs.
 
-**Stage 3 — Analyst**
-Claude AI processes articles on demand to:
-- Tag content by sector, geography, and theme
-- Generate weekly intelligence briefs
-- Produce podcast hooks for editorial use
+**Stage 3 — Serve** (`backend/app.py` + `frontend/`)
+A FastAPI backend serves a PWA: a deduped daily feed, article detail, a Claude-curated top 5, and natural-language Q&A across the archive.
 
 ---
 
@@ -36,28 +31,28 @@ Claude AI processes articles on demand to:
 
 | Layer | Technology |
 |---|---|
-| Ingestion | Python 3 · feedparser · RSS |
+| Ingestion | Python 3 · feedparser · GDELT DOC 2.0 API |
+| Database | Supabase PostgreSQL (`psycopg2`) |
 | AI Analysis | Anthropic Claude API |
-| Sync Layer | Google Apps Script |
-| Storage | JSON ledger · Google Drive |
-| Frontend | HTML · CSS · JavaScript |
-| Infrastructure | Docker |
+| Backend | FastAPI · uvicorn · APScheduler |
+| Frontend | PWA — HTML · CSS · JavaScript |
+| Infrastructure | Docker · Railway |
 
 ---
 
 ## Key Features
 
-- Automated polling every 6 hours with URL-based deduplication
-- ADE-framework tagging (Automation, Discovery, Emergence)
-- Weekly brief generation via Claude
-- Podcast hook output for content teams
-- Google Docs sync for non-technical collaborators
+- Automated polling of RSS + GDELT with URL-based deduplication
+- Per-article Claude summaries, takeaways, and ADE-framework tagging
+- Country/topic tagging (free from GDELT metadata where available)
+- Claude-curated daily top 5 and natural-language Q&A over the archive
+- Fully shareable — no personal inbox or OAuth in the loop
 
 ---
 
 ## Setup
 
-**Prerequisites:** Python 3, Anthropic API key, Google Cloud project (for Apps Script)
+**Prerequisites:** Python 3, Anthropic API key, a Supabase project
 
 ```bash
 git clone https://github.com/aasaya4116/SourcingAfrica.git
@@ -65,17 +60,21 @@ cd SourcingAfrica
 
 pip install -r requirements.txt
 
-cp config.json.example config.json
-# Add your Anthropic API key and Google Apps Script webhook URL to config.json
+cp .env.example .env
+# Fill in ANTHROPIC_API_KEY and DATABASE_URL (Supabase → Connect → Direct, port 5432)
 
-# Run the ingestor
+# Run the ingestor (polls sources, writes to Supabase)
 python ingestor/ingestor.py
 
-# Run the analyst on demand
-python analyst/analyst.py
+# Run the API + PWA
+uvicorn backend.app:app --reload
 ```
 
-Deploy `apps_script/ledger_sync.gs` as a Google Apps Script Web App and add the endpoint URL to `config.json`.
+Edit `config.json` to add/remove RSS feeds or tune the GDELT queries. Dead feeds fail gracefully per-source.
+
+### Deploy (Railway)
+
+Set `ANTHROPIC_API_KEY` and `DATABASE_URL` in Railway → Variables. Railway builds from the `Dockerfile` and runs both the ingestor and the web server. All persistence lives in Supabase — nothing is written to the container filesystem.
 
 ---
 

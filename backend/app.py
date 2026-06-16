@@ -83,15 +83,11 @@ def articles(limit: int = 20, source: str | None = None):
 
 @app.get("/api/articles/{article_id}")
 def article_detail(article_id: int):
-    from backend.db import _conn
-    with _conn() as conn:
-        row = conn.execute(
-            "SELECT * FROM articles WHERE id = ?", (article_id,)
-        ).fetchone()
-    if not row:
+    from backend.db import get_article_by_id
+    r = get_article_by_id(article_id)
+    if not r:
         raise HTTPException(status_code=404, detail="Article not found")
     import json as _json
-    r = dict(row)
     tags = {}
     if r["tags_json"]:
         try:
@@ -112,15 +108,12 @@ def article_detail(article_id: int):
 
 @app.get("/api/articles/{article_id}/summary")
 def article_summary(article_id: int):
-    from backend.db import _conn
-    with _conn() as conn:
-        row = conn.execute(
-            "SELECT * FROM articles WHERE id = ?", (article_id,)
-        ).fetchone()
+    from backend.db import get_article_by_id
+    row = get_article_by_id(article_id)
     if not row:
         raise HTTPException(status_code=404, detail="Article not found")
     # Pass save=True so a cache miss is written back automatically
-    result = summarize_article(dict(row), save=True)
+    result = summarize_article(row, save=True)
     if "error" in result:
         raise HTTPException(status_code=500, detail=result["error"])
     return result
@@ -154,7 +147,7 @@ def top5(refresh: bool = False):
 def trigger_extract():
     """Manually trigger story extraction — runs synchronously on next 5 newsletters, returns result."""
     import traceback
-    from backend.db import get_unextracted_newsletters, mark_as_digest, insert_article as _insert, _conn
+    from backend.db import get_unextracted_newsletters, mark_as_digest, insert_article as _insert, get_article_id
     from backend.qa import extract_stories, tag_article
 
     newsletters = get_unextracted_newsletters(limit=5)
@@ -169,10 +162,9 @@ def trigger_extract():
                 for s in stories:
                     _insert(s)
                     try:
-                        with _conn() as c:
-                            row = c.execute("SELECT id FROM articles WHERE message_id = ?", (s["message_id"],)).fetchone()
-                        if row:
-                            s["id"] = row["id"]
+                        article_id = get_article_id(s["message_id"])
+                        if article_id:
+                            s["id"] = article_id
                             tag_article(s, save=True)
                     except Exception:
                         pass
@@ -188,24 +180,8 @@ def trigger_extract():
 
 @app.get("/api/debug/stories")
 def debug_stories():
-    from backend.db import _conn
-    with _conn() as conn:
-        total     = conn.execute("SELECT COUNT(*) FROM articles").fetchone()[0]
-        digests   = conn.execute("SELECT COUNT(*) FROM articles WHERE is_digest = 1").fetchone()[0]
-        children  = conn.execute("SELECT COUNT(*) FROM articles WHERE parent_id IS NOT NULL").fetchone()[0]
-        unextracted = conn.execute(
-            "SELECT COUNT(*) FROM articles WHERE parent_id IS NULL AND (is_digest IS NULL OR is_digest = 0) AND length(body) > 2000"
-        ).fetchone()[0]
-        sample = conn.execute(
-            "SELECT id, source, subject, is_digest, parent_id, length(body) as body_len FROM articles ORDER BY id DESC LIMIT 10"
-        ).fetchall()
-    return {
-        "total": total,
-        "digests_marked": digests,
-        "child_stories": children,
-        "unextracted_newsletters": unextracted,
-        "recent_10": [dict(r) for r in sample],
-    }
+    from backend.db import debug_stats
+    return debug_stats()
 
 
 @app.get("/api/status")

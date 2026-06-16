@@ -1,16 +1,34 @@
 {
-  "gmail": {
-    "poll_hours": 6,
-    "senders": [
-      { "name": "Semafor Africa",   "match": "semafor.com" },
-      { "name": "Bloomberg Africa", "match": "bloomberg" },
-      { "name": "Tech Safari",      "match": "techsafari" }
-    ],
-    "lookback_days": 90
-  },
+  "poll_hours": 6,
   "rss": {
     "feeds": [
-      { "name": "TechCabal", "url": "https://techcabal.com/feed/" }
+      { "name": "TechCabal",        "url": "https://techcabal.com/feed/" },
+      { "name": "Techpoint Africa",  "url": "https://techpoint.africa/feed/" },
+      { "name": "Disrupt Africa",    "url": "https://disrupt-africa.com/feed/" },
+      { "name": "Condia",            "url": "https://www.condia.media/feed/" },
+      { "name": "Nairametrics",      "url": "https://nairametrics.com/feed/" },
+      { "name": "Rest of World",     "url": "https://restofworld.org/feed/latest/" },
+      { "name": "The Africa Report", "url": "https://www.theafricareport.com/feed/" },
+      { "name": "Semafor Africa",    "url": "https://www.semafor.com/rss/africa.xml" },
+      { "name": "Ventureburn",       "url": "https://ventureburn.com/feed/" },
+      { "name": "African Business",  "url": "https://african.business/feed" },
+      { "name": "TechCrunch Africa", "url": "https://techcrunch.com/tag/africa/feed/" },
+      { "name": "Quartz Africa",     "url": "https://qz.com/africa/rss" }
+    ]
+  },
+  "gdelt": {
+    "enabled": true,
+    "maxrecords": 75,
+    "timespan": "1d",
+    "queries": [
+      {
+        "name": "GDELT — African Tech & Startups",
+        "query": "(startup OR fintech OR \"venture capital\" OR \"Series A\" OR funding) (sourcecountry:nigeria OR sourcecountry:kenya OR sourcecountry:\"south africa\" OR sourcecountry:egypt OR sourcecountry:ghana)"
+      },
+      {
+        "name": "GDELT — African Business & Economy",
+        "query": "(economy OR investment OR trade OR acquisition OR IPO) (sourcecountry:nigeria OR sourcecountry:kenya OR sourcecountry:\"south africa\" OR sourcecountry:egypt OR sourcecountry:ghana OR sourcecountry:morocco)"
+      }
     ]
   },
   "analyst": {
