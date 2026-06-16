@@ -131,6 +131,11 @@ async function checkStatus() {
     const r = await fetch('/api/status');
     if (r.ok) {
       const d = await r.json();
+      // Populate landing-hero live stats (no-ops if hero isn't present)
+      const heroCount   = document.getElementById('heroCount');
+      const heroSources = document.getElementById('heroSources');
+      if (heroCount)   heroCount.textContent   = (d.total_articles || 0).toLocaleString();
+      if (heroSources) heroSources.textContent = (d.sources || []).length;
       statusDot.className = 'status-dot ok';
       statusDot.title = `${d.total_articles} articles · ${(d.sources || []).join(', ')}`;
       if (d.last_sync_at) {

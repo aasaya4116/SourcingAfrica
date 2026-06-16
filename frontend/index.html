@@ -69,8 +69,68 @@
     </div>
   </main>
 
-  <!-- ── Top 5 tab ── -->
+  <!-- ── Top 5 tab (home) ── -->
   <main class="tab-content active" id="tab-top5">
+
+    <!-- Landing hero -->
+    <section class="hero">
+      <div class="hero-copy">
+        <span class="overline">Daily African intelligence</span>
+        <h1 class="hero-title">African business &amp; tech, distilled to the <em>five stories</em> that matter.</h1>
+        <p class="hero-lede">Sourcing Africa scans trusted publications and the global GDELT news graph, then uses AI to rank what's worth your attention — and answers your questions about the continent in plain language.</p>
+        <div class="hero-meta">
+          <span class="hero-stat"><strong id="heroCount">—</strong> stories tracked</span>
+          <span class="hero-dot">•</span>
+          <span class="hero-stat"><strong id="heroSources">—</strong> trusted sources</span>
+          <span class="hero-dot">•</span>
+          <span class="hero-stat">Refreshed daily</span>
+        </div>
+      </div>
+
+      <div class="hero-art" aria-hidden="true">
+        <svg viewBox="0 0 400 400" width="400" height="400" role="img">
+          <defs>
+            <radialGradient id="haGlow" cx="50%" cy="46%" r="55%">
+              <stop offset="0%" stop-color="#C8A96E" stop-opacity="0.30"/>
+              <stop offset="58%" stop-color="#C8A96E" stop-opacity="0.05"/>
+              <stop offset="100%" stop-color="#C8A96E" stop-opacity="0"/>
+            </radialGradient>
+            <linearGradient id="haCore" x1="0" y1="0" x2="1" y2="1">
+              <stop offset="0%" stop-color="#D8B978"/>
+              <stop offset="100%" stop-color="#10B981"/>
+            </linearGradient>
+          </defs>
+          <circle cx="200" cy="185" r="195" fill="url(#haGlow)"/>
+          <g fill="none" stroke="#C8A96E">
+            <circle cx="200" cy="185" r="62"  stroke-opacity="0.16"/>
+            <circle cx="200" cy="185" r="112" stroke-opacity="0.11"/>
+            <circle cx="200" cy="185" r="162" stroke-opacity="0.07"/>
+          </g>
+          <g stroke="#C8A96E" stroke-opacity="0.28" stroke-width="1.2">
+            <line x1="200" y1="185" x2="320" y2="92"/>
+            <line x1="200" y1="185" x2="338" y2="232"/>
+            <line x1="200" y1="185" x2="250" y2="322"/>
+            <line x1="200" y1="185" x2="92"  y2="300"/>
+            <line x1="200" y1="185" x2="58"  y2="168"/>
+            <line x1="200" y1="185" x2="118" y2="68"/>
+          </g>
+          <g>
+            <circle cx="320" cy="92"  r="6" fill="#C8A96E"/>
+            <circle cx="338" cy="232" r="5" fill="#10B981"/>
+            <circle cx="250" cy="322" r="4" fill="#6A6A72"/>
+            <circle cx="92"  cy="300" r="6" fill="#10B981"/>
+            <circle cx="58"  cy="168" r="4" fill="#C8A96E"/>
+            <circle cx="118" cy="68"  r="5" fill="#6A6A72"/>
+          </g>
+          <circle class="ha-ping" cx="200" cy="185" r="26" fill="none" stroke="#C8A96E" stroke-width="1.5"/>
+          <circle cx="200" cy="185" r="26" fill="#0B0B0D" stroke="url(#haCore)" stroke-width="2"/>
+          <circle cx="200" cy="185" r="11" fill="url(#haCore)"/>
+        </svg>
+      </div>
+    </section>
+
+    <div class="section-head"><span class="overline">Today's top 5</span></div>
+
     <div class="top5-list" id="top5List">
       <div class="loading">Loading top stories…</div>
     </div>

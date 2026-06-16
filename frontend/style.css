@@ -157,6 +157,85 @@ header {
   overflow: hidden;
 }
 
+/* ── Home hero / landing — DESIGN.md modern dark editorial ───────────── */
+/* The home tab scrolls as one unit so the hero scrolls away above the list. */
+#tab-top5 { overflow-y: auto; -webkit-overflow-scrolling: touch; }
+#tab-top5 .top5-list { flex: 0 0 auto; overflow: visible; }
+
+.hero {
+  position: relative;
+  flex: 0 0 auto;
+  display: grid;
+  grid-template-columns: 1.15fr 0.85fr;
+  align-items: center;
+  gap: 28px;
+  padding: 40px 20px 32px;
+  border-bottom: 1px solid var(--border-subtle);
+  overflow: hidden;
+}
+.hero::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(110% 90% at 82% 6%, var(--accent-soft), transparent 58%);
+  pointer-events: none;
+}
+.hero-copy { position: relative; z-index: 1; }
+.hero .overline { margin-bottom: 14px; }
+.hero-title {
+  font-size: clamp(1.55rem, 4.6vw, 2.35rem);
+  line-height: 1.12;
+  font-weight: 800;
+  letter-spacing: -0.025em;
+  color: var(--text);
+  margin-bottom: 14px;
+}
+.hero-title em { font-style: normal; color: var(--accent); }
+.hero-lede {
+  font-size: 1rem;
+  line-height: 1.6;
+  color: var(--text-2);
+  max-width: 48ch;
+  margin-bottom: 22px;
+}
+.hero-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  font-size: 0.82rem;
+  color: var(--muted);
+}
+.hero-meta strong {
+  color: var(--text);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.hero-dot { color: var(--border); }
+.hero-art { position: relative; z-index: 1; }
+.hero-art svg { width: 100%; height: auto; display: block; }
+.hero-art .ha-ping {
+  transform-origin: 200px 185px;
+  transform-box: fill-box;
+  animation: haPing 3.4s ease-out infinite;
+}
+@keyframes haPing {
+  0%   { transform: scale(0.55); opacity: 0.6; }
+  70%  { opacity: 0; }
+  100% { transform: scale(2.4); opacity: 0; }
+}
+
+.section-head { padding: 18px 16px 6px; }
+
+@media (max-width: 640px) {
+  .hero {
+    grid-template-columns: 1fr;
+    gap: 16px;
+    padding: 26px 16px 22px;
+  }
+  .hero-art { max-width: 188px; margin: 0 auto; }
+}
+
 /* ── Ask tab — chat layout ─────────────────────────────────────────── */
 .chat-messages {
   flex: 1;
