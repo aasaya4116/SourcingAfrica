@@ -7,6 +7,9 @@ import os
 import threading
 from pathlib import Path
 
+from dotenv import load_dotenv
+load_dotenv()
+
 from fastapi import FastAPI, HTTPException
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
@@ -196,7 +199,7 @@ def status():
 
 @app.post("/api/sync")
 def sync():
-    """Trigger a Gmail sync in the background."""
+    """Trigger a source sync (RSS + GDELT) in the background."""
     def _run():
         import sys
         from datetime import datetime, timezone
