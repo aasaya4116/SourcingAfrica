@@ -2,14 +2,44 @@
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 [hidden] { display: none !important; }
 
+/* ── Design tokens — Adebowale workspace design system (DESIGN.md) ───
+   Modern dark editorial: near-black canvas, gold lead accent, emerald
+   secondary, 3-step gray text ramp, Inter type, pill + 12px-card system. */
 :root {
-  --bg:        #0a0a0a;
-  --surface:   #141414;
-  --border:    #242424;
-  --accent:    #e8c84a;
-  --text:      #f0f0f0;
-  --muted:     #888;
-  --radius:    12px;
+  /* Surfaces */
+  --bg:           #0B0B0D;   /* app background */
+  --surface:      #141416;   /* card / panel (surface-1) */
+  --surface-2:    #1A1A1D;   /* raised card / input / hover (surface-2) */
+  --surface-3:    #242428;   /* active row / elevated chip (surface-3) */
+
+  /* Borders */
+  --border:        #2A2A2E;  /* default card/input border */
+  --border-subtle: #1E1E22;  /* row dividers, faint separation */
+
+  /* Text ramp */
+  --text:        #F0F0F2;    /* primary */
+  --text-2:      #A0A0A8;    /* secondary / body */
+  --muted:       #6A6A72;    /* tertiary / meta / hints */
+
+  /* Accents */
+  --accent:        #C8A96E;  /* gold — primary brand accent (the signature) */
+  --accent-strong: #D8B978;  /* gold hover/active */
+  --accent-soft:   rgba(200,169,110,0.12); /* gold tint / glow base */
+  --emerald:       #10B981;  /* secondary — energy / status-live / success */
+  --danger:        #EF4444;  /* errors */
+  --on-accent:     #0B0B0D;  /* text on gold/emerald fills */
+
+  /* Radii */
+  --radius:    12px;         /* default card / input */
+  --radius-sm: 8px;          /* chips, tags, small surfaces */
+  --radius-lg: 20px;         /* sheets, large fields */
+
+  /* Type */
+  --font-sans: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+
+  /* Shadow + safe areas */
+  --shadow-card:    0 2px 20px rgba(0,0,0,0.4);
+  --shadow-overlay: 0 -12px 40px rgba(0,0,0,0.5);
   --safe-top:  env(safe-area-inset-top, 0px);
   --safe-bot:  env(safe-area-inset-bottom, 0px);
 }
@@ -18,11 +48,32 @@ html, body {
   height: 100%;
   background: var(--bg);
   color: var(--text);
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-family: var(--font-sans);
   font-size: 16px;
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
   overflow: hidden;
+}
+
+/* ── Signature overline micro-label (DESIGN.md §3.3) ─────────────────── */
+.overline {
+  display: block;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+
+/* ── Motion: respect reduced-motion (DESIGN.md §6/§7) ────────────────── */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }
 
 /* ── Header ────────────────────────────────────────────────────────── */
@@ -43,7 +94,7 @@ header {
 .logo {
   font-weight: 700;
   font-size: 1.05rem;
-  letter-spacing: -0.01em;
+  letter-spacing: -0.02em;
   color: var(--accent);
 }
 .header-right {
@@ -60,9 +111,11 @@ header {
   border-radius: 50%;
   background: var(--muted);
   flex-shrink: 0;
+  transition: background 0.2s, box-shadow 0.2s;
 }
-.status-dot.ok    { background: #4ade80; }
-.status-dot.error { background: #f87171; }
+/* Glow signals "live" — DESIGN.md §6 (low-opacity garnish, interactive only) */
+.status-dot.ok    { background: var(--emerald); box-shadow: 0 0 8px rgba(16,185,129,0.6); }
+.status-dot.error { background: var(--danger); }
 
 /* ── Tab bar ───────────────────────────────────────────────────────── */
 .tab-bar {
@@ -72,18 +125,28 @@ header {
 }
 .tab {
   flex: 1;
+  min-height: 44px;
   padding: 12px;
   background: none;
   border: none;
-  color: var(--muted);
+  border-bottom: 2px solid transparent;
+  color: var(--text-2);
+  font-family: inherit;
   font-size: 0.9rem;
   font-weight: 500;
   cursor: pointer;
-  transition: color 0.15s;
+  transition: color 0.15s, border-color 0.15s;
+}
+.tab:hover { color: var(--text); }
+.tab:focus-visible {
+  outline: none;
+  color: var(--text);
+  box-shadow: inset 0 0 0 2px var(--accent);
+  border-radius: 6px;
 }
 .tab.active {
   color: var(--text);
-  border-bottom: 2px solid var(--accent);
+  border-bottom-color: var(--accent);
 }
 
 /* ── Tab content ───────────────────────────────────────────────────── */
@@ -116,26 +179,29 @@ header {
   width: 68px; height: 68px;
   border-radius: 18px;
   background: var(--accent);
-  color: #000;
+  color: var(--on-accent);
   font-size: 1.7rem;
   font-weight: 800;
   letter-spacing: -0.04em;
   display: flex;
   align-items: center;
   justify-content: center;
-  margin-bottom: 12px;
-  box-shadow: 0 4px 24px rgba(232,200,74,0.25);
+  margin-bottom: 14px;
+  box-shadow: 0 4px 24px rgba(200,169,110,0.28);
 }
 .welcome-sub {
-  font-size: 0.85rem;
-  color: var(--muted);
+  font-size: 0.9rem;
+  color: var(--text-2);
 }
 
-/* Suggestions / chips */
+/* Suggestions / chips — "Try asking:" rendered as the signature overline */
 .hint {
-  font-size: 0.8rem;
-  color: var(--muted);
-  margin-bottom: 8px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--accent);
+  margin-bottom: 12px;
 }
 .chips {
   display: flex;
@@ -146,16 +212,25 @@ header {
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  padding: 10px 14px;
-  color: var(--text);
-  font-size: 0.875rem;
+  padding: 12px 14px;
+  min-height: 44px;
+  color: var(--text-2);
+  font-family: inherit;
+  font-size: 0.9rem;
   text-align: left;
   cursor: pointer;
-  transition: background 0.15s, border-color 0.15s;
+  transition: background 0.2s, border-color 0.2s, color 0.2s, transform 0.2s;
 }
 .chip:hover, .chip:active {
-  background: #1e1e1e;
+  background: var(--surface-2);
   border-color: var(--accent);
+  color: var(--text);
+  transform: translateY(-1px);
+}
+.chip:focus-visible {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
 }
 
 /* Chat message bubbles */
@@ -186,7 +261,8 @@ header {
 }
 .chat-msg.user .bubble {
   background: var(--accent);
-  color: #000;
+  color: var(--on-accent);
+  font-weight: 500;
   border-bottom-right-radius: 4px;
 }
 .chat-msg.assistant .bubble {
@@ -217,25 +293,29 @@ header {
 }
 .input-bar textarea {
   flex: 1;
-  background: var(--surface);
+  background: var(--surface-2);
   border: 1px solid var(--border);
-  border-radius: 20px;
-  padding: 10px 14px;
+  border-radius: var(--radius-lg);
+  padding: 11px 16px;
   color: var(--text);
   font-size: 0.95rem;
+  line-height: 1.5;
   font-family: inherit;
   resize: none;
   max-height: 120px;
   overflow-y: auto;
   outline: none;
-  transition: border-color 0.15s;
+  transition: border-color 0.15s, box-shadow 0.15s;
 }
-.input-bar textarea:focus { border-color: var(--accent); }
+.input-bar textarea:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
 .input-bar textarea::placeholder { color: var(--muted); }
 
 .send-btn {
   flex-shrink: 0;
-  width: 42px; height: 42px;
+  width: 44px; height: 44px;
   background: var(--accent);
   border: none;
   border-radius: 50%;
@@ -243,9 +323,14 @@ header {
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  transition: opacity 0.15s;
+  transition: opacity 0.2s, transform 0.2s;
 }
-.send-btn svg { width: 18px; height: 18px; stroke: #000; }
+.send-btn:hover:not(:disabled) { opacity: 0.9; transform: translateY(-1px); }
+.send-btn:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+.send-btn svg { width: 18px; height: 18px; stroke: var(--on-accent); }
 .send-btn:disabled { opacity: 0.4; cursor: default; }
 
 /* ── Top 5 tab ─────────────────────────────────────────────────────── */
@@ -258,18 +343,20 @@ header {
   display: flex;
   gap: 12px;
   padding: 16px;
-  border-bottom: 1px solid var(--border);
+  border-bottom: 1px solid var(--border-subtle);
   cursor: pointer;
   transition: background 0.15s;
   align-items: flex-start;
 }
-.top5-card:active { background: #1a1a1a; }
+.top5-card:hover  { background: var(--surface); }
+.top5-card:active { background: var(--surface-2); }
 .top5-card .card-thumb { align-self: center; }
 .top5-rank {
   font-size: 1.75rem;
   font-weight: 800;
+  font-variant-numeric: tabular-nums;
   color: var(--accent);
-  opacity: 0.3;
+  opacity: 0.35;
   line-height: 1;
   min-width: 28px;
   padding-top: 3px;
@@ -300,7 +387,7 @@ header {
 }
 .top5-reason {
   font-size: 0.78rem;
-  color: var(--muted);
+  color: var(--text-2);
   line-height: 1.45;
   display: flex;
   align-items: baseline;
@@ -331,20 +418,30 @@ header {
 .filter-bar::-webkit-scrollbar { display: none; }
 .filter-chip {
   flex-shrink: 0;
-  padding: 6px 14px;
+  padding: 7px 14px;
   background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: 20px;
-  color: var(--muted);
+  border-radius: 9999px;
+  color: var(--text-2);
+  font-family: inherit;
   font-size: 0.8rem;
   cursor: pointer;
-  transition: all 0.15s;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
   white-space: nowrap;
+}
+.filter-chip:hover {
+  border-color: var(--accent);
+  color: var(--text);
+}
+.filter-chip:focus-visible {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
 }
 .filter-chip.active {
   background: var(--accent);
   border-color: var(--accent);
-  color: #000;
+  color: var(--on-accent);
   font-weight: 600;
 }
 
@@ -372,9 +469,9 @@ header {
   letter-spacing: 0.02em;
 }
 .tag-country {
-  background: #1e1e1e;
+  background: var(--surface-2);
   border-color: var(--border);
-  color: var(--muted);
+  color: var(--text-2);
 }
 /* .tag-topic color/bg set inline per topic */
 
@@ -408,12 +505,13 @@ header {
 
 .article-card {
   padding: 14px 16px;
-  border-bottom: 1px solid var(--border);
+  border-bottom: 1px solid var(--border-subtle);
   cursor: pointer;
   transition: background 0.15s;
   position: relative;
 }
-.article-card:active { background: #1a1a1a; }
+.article-card:hover  { background: var(--surface); }
+.article-card:active { background: var(--surface-2); }
 
 .card-row {
   display: flex;
@@ -458,7 +556,7 @@ header {
 }
 .article-preview {
   font-size: 0.8rem;
-  color: var(--muted);
+  color: var(--text-2);
   line-height: 1.5;
   display: -webkit-box;
   -webkit-line-clamp: 3;
@@ -488,7 +586,7 @@ header {
 }
 .skeleton-card {
   padding: 14px 16px;
-  border-bottom: 1px solid var(--border);
+  border-bottom: 1px solid var(--border-subtle);
   display: flex;
   gap: 12px;
   align-items: flex-start;
@@ -501,7 +599,7 @@ header {
 }
 .skel {
   border-radius: 4px;
-  background: linear-gradient(90deg, #181818 25%, #252525 50%, #181818 75%);
+  background: linear-gradient(90deg, var(--surface) 25%, var(--surface-3) 50%, var(--surface) 75%);
   background-size: 200% 100%;
   animation: shimmer 1.4s ease-in-out infinite;
 }
@@ -532,15 +630,25 @@ header {
   z-index: 100;
   display: flex;
   align-items: flex-end;
+  animation: overlayIn 0.2s ease-out;
+}
+@keyframes overlayIn { from { opacity: 0; } to { opacity: 1; } }
+@keyframes sheetUp {
+  from { transform: translateY(100%); }
+  to   { transform: translateY(0); }
 }
 .modal {
   background: var(--surface);
-  border-radius: 20px 20px 0 0;
+  border: 1px solid var(--border);
+  border-bottom: none;
+  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
   width: 100%;
   max-height: 90dvh;
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  box-shadow: var(--shadow-overlay);
+  animation: sheetUp 0.28s cubic-bezier(0.22, 1, 0.36, 1);
 }
 .modal-header {
   display: flex;
@@ -562,17 +670,24 @@ header {
   margin-top: 2px;
 }
 .modal-close {
-  background: var(--border);
-  border: none;
-  color: var(--text);
-  width: 30px; height: 30px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  color: var(--text-2);
+  width: 36px; height: 36px;
   border-radius: 50%;
-  font-size: 0.8rem;
+  font-size: 0.85rem;
   cursor: pointer;
   flex-shrink: 0;
   display: flex;
   align-items: center;
   justify-content: center;
+  transition: border-color 0.15s, color 0.15s;
+}
+.modal-close:hover { border-color: var(--accent); color: var(--text); }
+.modal-close:focus-visible {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
 }
 .modal-hero {
   width: 100%;
@@ -594,7 +709,7 @@ header {
   padding: 0 16px calc(24px + var(--safe-bot));
   font-size: 0.88rem;
   line-height: 1.7;
-  color: #ccc;
+  color: var(--text-2);
   white-space: pre-wrap;
 }
 
@@ -606,21 +721,22 @@ header {
   padding: 8px 0;
 }
 .summary-paragraph {
-  font-size: 0.9rem;
+  font-size: 0.95rem;
   line-height: 1.75;
-  color: #ddd;
+  color: var(--text);
   margin-bottom: 20px;
 }
 .summary-section {
   margin-bottom: 20px;
 }
+/* Content section label — the signature gold overline */
 .section-label {
   display: block;
-  font-size: 0.68rem;
-  font-weight: 700;
+  font-size: 11px;
+  font-weight: 600;
   text-transform: uppercase;
-  letter-spacing: 0.08em;
-  color: var(--muted);
+  letter-spacing: 0.18em;
+  color: var(--accent);
   margin-bottom: 10px;
 }
 .summary-takeaways {
@@ -633,8 +749,8 @@ header {
   padding-left: 20px;
   position: relative;
   font-size: 0.88rem;
-  line-height: 1.5;
-  color: #ddd;
+  line-height: 1.55;
+  color: var(--text-2);
 }
 .summary-takeaways li::before {
   content: "→";
@@ -643,21 +759,22 @@ header {
   color: var(--accent);
   font-weight: 700;
 }
+/* "So what" — DESIGN.md accent card (gold left-rail, tinted fill) */
 .summary-sowhat {
-  background: #1e1e1e;
-  border-left: 3px solid var(--accent);
-  border-radius: 0 8px 8px 0;
-  padding: 10px 12px;
+  background: var(--accent-soft);
+  border-left: 2px solid var(--accent);
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+  padding: 12px 14px;
   font-size: 0.85rem;
-  line-height: 1.5;
-  color: #ccc;
+  line-height: 1.55;
+  color: var(--text);
 }
 .sowhat-label {
   display: block;
-  font-size: 0.7rem;
-  font-weight: 700;
+  font-size: 11px;
+  font-weight: 600;
   text-transform: uppercase;
-  letter-spacing: 0.05em;
+  letter-spacing: 0.18em;
   color: var(--accent);
-  margin-bottom: 4px;
+  margin-bottom: 6px;
 }
