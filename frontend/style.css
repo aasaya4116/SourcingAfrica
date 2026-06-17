@@ -458,6 +458,24 @@ header {
   font-size: 0.68rem;
   color: var(--muted);
 }
+/* Multi-outlet coverage hint — emerald dot signals corroboration (DESIGN.md) */
+.coverage-note {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 6px;
+  font-size: 0.7rem;
+  color: var(--muted);
+}
+.coverage-note::before {
+  content: "";
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--emerald);
+  opacity: 0.85;
+  flex-shrink: 0;
+}
 .top5-title {
   font-size: 0.92rem;
   font-weight: 600;

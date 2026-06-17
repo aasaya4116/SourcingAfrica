@@ -35,6 +35,49 @@ Rules:
 - No markdown, valid JSON only"""
 
 
+def _enforce_source_cap(picks: list[dict], candidates: list[dict],
+                        max_per_source: int = 2, target: int = 5) -> list[dict]:
+    """Guarantee no single source dominates the Top 5; backfill from the
+    deduped candidate pool (most recent) if the cap drops us below `target`."""
+    import json
+    capped, counts, picked = [], {}, set()
+    for item in picks:
+        src = item.get("source", "")
+        if counts.get(src, 0) >= max_per_source:
+            continue
+        counts[src] = counts.get(src, 0) + 1
+        capped.append(item)
+        picked.add(item.get("id"))
+    for a in candidates:
+        if len(capped) >= target:
+            break
+        if a["id"] in picked or counts.get(a.get("source", ""), 0) >= max_per_source:
+            continue
+        tags = {}
+        if a.get("tags_json"):
+            try:
+                tags = json.loads(a["tags_json"])
+            except Exception:
+                pass
+        capped.append({
+            "id":        a["id"],
+            "source":    a["source"],
+            "subject":   a["subject"],
+            "date":      a["date"],
+            "reason":    "Recent coverage",
+            "ade_tag":   "",
+            "ade_score": 0,
+            "image_url": a.get("image_url"),
+            "country":   tags.get("country"),
+            "topic":     tags.get("topic"),
+            "coverage_count":  a.get("coverage_count", 1),
+            "also_covered_by": a.get("also_covered_by", []),
+        })
+        counts[a["source"]] = counts.get(a["source"], 0) + 1
+        picked.add(a["id"])
+    return capped
+
+
 def get_top5() -> list[dict]:
     import json
 
@@ -56,6 +99,11 @@ def get_top5() -> list[dict]:
     articles = get_articles_since(14) or get_recent_articles(limit=50)
     if not articles:
         return []
+
+    # Collapse the same story from multiple outlets before ranking, so Claude
+    # never sees (or picks) five versions of one headline.
+    from backend.dedup import collapse_duplicates
+    articles = collapse_duplicates(articles)
 
     article_list = "\n".join(
         f"{a['id']} | {a['source']} | {a['date'][:10]} | {a['subject']}"
@@ -103,9 +151,13 @@ def get_top5() -> list[dict]:
                         "image_url": a.get("image_url"),
                         "country":   tags.get("country"),
                         "topic":     tags.get("topic"),
+                        "coverage_count":  a.get("coverage_count", 1),
+                        "also_covered_by": a.get("also_covered_by", []),
                     })
                 else:
                     log.warning("get_top5: Claude picked id=%s not in article_map", aid)
+            # Enforce source diversity (HARD <=2/source) in code, not just prompt.
+            result = _enforce_source_cap(result, articles, max_per_source=2, target=5)
             if result:
                 set_meta("top5_json",       json.dumps(result))
                 set_meta("top5_updated_at", datetime.now(timezone.utc).isoformat())

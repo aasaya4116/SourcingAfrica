@@ -331,6 +331,16 @@ function markRead(id) {
   localStorage.setItem(READ_KEY, JSON.stringify([...ids]));
 }
 
+// Multi-outlet coverage hint ("Also covered by …") for deduped cards.
+function coverageNote(a) {
+  // Only surface genuine cross-source corroboration (not same-outlet reposts).
+  const others = a.also_covered_by || [];
+  if (!others.length) return '';
+  const shown = others.slice(0, 2).map(escHtml).join(', ');
+  const extra = others.length > 2 ? ` +${others.length - 2}` : '';
+  return `<div class="coverage-note">Also covered by ${shown}${extra}</div>`;
+}
+
 // ── Top 5 ─────────────────────────────────────────────────────────────────────
 
 async function loadTop5() {
@@ -358,6 +368,7 @@ async function loadTop5() {
           <div class="top5-title">${escHtml(s.subject)}</div>
           <div class="top5-reason">${adeBadge(s.ade_tag)}<span style="font-style:italic">${escHtml(s.reason)}</span></div>
           ${tagBubbles(s.country, s.topic)}
+          ${coverageNote(s)}
         </div>
         ${cardThumb(s.image_url, s.source, sourceColor(s.source))}
       </div>`).join('');
@@ -426,6 +437,7 @@ function renderFeed(articles) {
             <div class="article-title">${escHtml(a.subject)}</div>
             <div class="article-preview">${escHtml(a.preview)}</div>
             ${tagBubbles(a.country, a.topic)}
+            ${coverageNote(a)}
           </div>
           ${cardThumb(a.image_url, a.source, color)}
         </div>

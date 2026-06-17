@@ -12,6 +12,7 @@ import json
 import logging
 import re
 import sys
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -173,12 +174,26 @@ def fetch_gdelt(query_cfg: dict, gdelt_cfg: dict) -> int:
     }
     log.info("Polling GDELT: %s", name)
 
-    resp = requests.get(
-        GDELT_ENDPOINT, params=params, timeout=30,
-        headers={"User-Agent": "SourcingAfrica/1.0"},
-    )
+    # GDELT rate-limits aggressively (HTTP 429). Retry with linear backoff.
+    resp = None
+    for attempt in range(1, 4):
+        resp = requests.get(
+            GDELT_ENDPOINT, params=params, timeout=30,
+            headers={"User-Agent": "SourcingAfrica/1.0"},
+        )
+        if resp.status_code == 429:
+            wait = 5 * attempt
+            log.warning("GDELT 429 (rate-limited) on '%s' — backing off %ds (attempt %d/3)", name, wait, attempt)
+            time.sleep(wait)
+            continue
+        break
     resp.raise_for_status()
-    data = resp.json()
+    try:
+        data = resp.json()
+    except ValueError:
+        # GDELT occasionally returns an HTML error page with a 200 status
+        log.warning("GDELT returned non-JSON for '%s' — skipping this cycle", name)
+        return 0
 
     new_count = 0
     for art in data.get("articles", []):
@@ -226,7 +241,11 @@ def run_ingestor():
 
     gdelt_cfg = cfg.get("gdelt", {})
     if gdelt_cfg.get("enabled"):
-        for q in gdelt_cfg.get("queries", []):
+        queries = gdelt_cfg.get("queries", [])
+        gap = gdelt_cfg.get("query_gap_seconds", 3)
+        for i, q in enumerate(queries):
+            if i > 0:
+                time.sleep(gap)  # space out calls to avoid GDELT 429 rate-limiting
             try:
                 total += fetch_gdelt(q, gdelt_cfg)
             except Exception as e:

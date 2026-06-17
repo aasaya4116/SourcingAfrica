@@ -63,7 +63,9 @@ def ask(req: QuestionRequest):
 @app.get("/api/articles")
 def articles(limit: int = 20, source: str | None = None):
     import json as _json
+    from backend.dedup import collapse_duplicates
     rows = get_recent_articles(limit=limit, source=source or None)
+    rows = collapse_duplicates(rows)  # one card per story across outlets
     result = []
     for r in rows:
         tags = {}
@@ -81,6 +83,8 @@ def articles(limit: int = 20, source: str | None = None):
             "image_url": r["image_url"],
             "country":   tags.get("country"),
             "topic":     tags.get("topic"),
+            "coverage_count":  r.get("coverage_count", 1),
+            "also_covered_by": r.get("also_covered_by", []),
         })
     return {"articles": result, "total": count_articles()}
 
