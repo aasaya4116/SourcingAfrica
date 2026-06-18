@@ -26,12 +26,23 @@ app = FastAPI(title="Sourcing Africa", docs_url=None, redoc_url=None)
 
 @app.on_event("startup")
 def startup():
-    init_db()
+    import logging
+    _log = logging.getLogger("uvicorn.error")
+    # Never let a DB hiccup at boot crash-loop the container on Railway: log and
+    # carry on. init_db() is idempotent and re-runs cheaply once the DB is back.
+    try:
+        init_db()
+    except Exception as exc:
+        _log.error("init_db() failed at startup; serving anyway, will retry on demand: %s", exc)
+
     def _backfill():
         # Note: newsletter story-extraction is retired — RSS/GDELT deliver atomic
         # articles, so splitting them into "stories" only fragments the feed.
-        backfill_summaries() # Summarise any unsummarised articles
-        backfill_tags()      # Tag any untagged articles
+        try:
+            backfill_summaries()  # Summarise any unsummarised articles
+            backfill_tags()       # Tag any untagged articles
+        except Exception as exc:
+            _log.warning("startup backfill failed (non-fatal): %s", exc)
     thread = threading.Thread(target=_backfill, daemon=True)
     thread.start()
 

@@ -16,7 +16,13 @@ _pool: pg_pool.SimpleConnectionPool | None = None
 def _get_pool() -> pg_pool.SimpleConnectionPool:
     global _pool
     if _pool is None:
-        _pool = pg_pool.SimpleConnectionPool(1, 5, os.environ["DATABASE_URL"])
+        dsn = os.environ.get("DATABASE_URL")
+        if not dsn:
+            raise RuntimeError(
+                "DATABASE_URL is not set. On Railway use the Supabase "
+                "connection-pooler string (IPv4), not the direct db host."
+            )
+        _pool = pg_pool.SimpleConnectionPool(1, 5, dsn)
     return _pool
 
 
@@ -24,6 +30,21 @@ def _get_pool() -> pg_pool.SimpleConnectionPool:
 def _conn():
     pool = _get_pool()
     conn = pool.getconn()
+    # Supabase's pooler closes idle connections, so a handle from the pool may be
+    # dead. Validate it and transparently swap in a fresh one before use —
+    # otherwise the first request after an idle period fails with InterfaceError.
+    try:
+        if conn.closed:
+            raise psycopg2.OperationalError("connection closed")
+        with conn.cursor() as cur:
+            cur.execute("SELECT 1")
+        conn.rollback()  # clear the validation transaction
+    except psycopg2.Error:
+        try:
+            pool.putconn(conn, close=True)
+        except Exception:
+            pass
+        conn = pool.getconn()
     try:
         yield conn
         conn.commit()
