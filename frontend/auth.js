@@ -59,10 +59,20 @@ async function initAuth() {
 
   const { data: { session } } = await sb.auth.getSession();
   showGate(!session);
+  let wasSignedIn = !!session;
 
   sb.auth.onAuthStateChange((_event, s) => {
-    showGate(!s);
-    if (s) location.reload();   // re-fetch every view as the signed-in user
+    const signedIn = !!s;
+    // Act only on a real transition. supabase-js emits INITIAL_SESSION on every
+    // page load when a session is stored, and TOKEN_REFRESHED periodically after
+    // that. This used to call location.reload() whenever a session was present,
+    // so the moment you signed in the page reloaded, fired INITIAL_SESSION again,
+    // and reloaded forever — an endless refresh loop that ate every click.
+    if (signedIn === wasSignedIn) return;
+    wasSignedIn = signedIn;
+    showGate(!signedIn);
+    // Re-run the data loads in place rather than reloading the document.
+    if (signedIn && typeof window.initAppData === 'function') window.initAppData();
   });
 }
 

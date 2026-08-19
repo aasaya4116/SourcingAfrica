@@ -584,6 +584,13 @@ modalOverlay.addEventListener('click', e => {
 
 // ── Init ──────────────────────────────────────────────────────────────────────
 
-checkStatus();
-loadSuggestions();
-loadTop5();
+// Exposed so auth.js can re-run these the moment a sign-in completes, instead
+// of reloading the whole document to pick up the new session.
+function initAppData() {
+  checkStatus();
+  loadSuggestions();
+  loadTop5();
+}
+window.initAppData = initAppData;
+
+initAppData();
