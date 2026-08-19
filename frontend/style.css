@@ -579,6 +579,7 @@ header {
 
 /* ── Card thumbnail ─────────────────────────────────────────────────── */
 .card-thumb {
+  position: relative;
   width: 68px;
   height: 68px;
   border-radius: 8px;
@@ -590,6 +591,8 @@ header {
   opacity: 0.85;
 }
 .card-thumb img {
+  position: absolute;
+  inset: 0;
   width: 100%;
   height: 100%;
   object-fit: cover;
@@ -874,4 +877,96 @@ header {
   letter-spacing: 0.18em;
   color: var(--accent);
   margin-bottom: 6px;
+}
+
+/* Read-at-source link — the way out of the app to the outlet that reported it */
+.modal-link {
+  display: block;
+  margin-top: 16px;
+  padding: 12px 14px;
+  border: 1px solid var(--accent);
+  border-radius: var(--radius-sm);
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-size: 0.85rem;
+  font-weight: 600;
+  text-align: center;
+  text-decoration: none;
+}
+.modal-link:active { background: var(--accent); color: var(--on-accent); }
+
+/* ── Sign-in gate ─────────────────────────────────────────────────────────── */
+body.locked { overflow: hidden; }
+
+.auth-gate {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: var(--bg);
+}
+.auth-card {
+  width: 100%;
+  max-width: 340px;
+  text-align: center;
+}
+.auth-mark {
+  width: 56px;
+  height: 56px;
+  margin: 0 auto 20px;
+  border-radius: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--accent-soft);
+  border: 1px solid var(--accent);
+  color: var(--accent);
+  font-weight: 800;
+  letter-spacing: 0.06em;
+}
+.auth-title {
+  font-size: 1.5rem;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  margin-bottom: 6px;
+}
+.auth-sub {
+  color: var(--text-2);
+  font-size: 0.9rem;
+  margin-bottom: 28px;
+}
+.auth-form { display: flex; flex-direction: column; gap: 10px; }
+.auth-form input {
+  padding: 13px 14px;
+  border-radius: var(--radius);
+  border: 1px solid rgba(255,255,255,0.12);
+  background: rgba(255,255,255,0.04);
+  color: var(--text);
+  font-family: var(--font-sans);
+  font-size: 0.95rem;
+}
+.auth-form input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+.auth-form button {
+  padding: 13px 14px;
+  border: none;
+  border-radius: var(--radius);
+  background: var(--accent);
+  color: var(--on-accent);
+  font-family: var(--font-sans);
+  font-size: 0.92rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+.auth-form button:disabled { opacity: 0.55; }
+.auth-msg {
+  margin-top: 14px;
+  min-height: 20px;
+  font-size: 0.84rem;
+  color: var(--text-2);
 }

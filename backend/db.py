@@ -3,6 +3,7 @@ PostgreSQL (Supabase) database layer for Sourcing Africa.
 """
 
 import os
+import threading
 from contextlib import contextmanager
 from datetime import datetime, timezone, timedelta
 
@@ -10,19 +11,25 @@ import psycopg2
 from psycopg2.extras import RealDictCursor
 from psycopg2 import pool as pg_pool
 
-_pool: pg_pool.SimpleConnectionPool | None = None
+# ThreadedConnectionPool, not SimpleConnectionPool: FastAPI runs sync endpoints
+# in a threadpool and we also spawn background threads (the scheduler, /api/sync),
+# so the pool is genuinely reached from more than one thread.
+_pool: pg_pool.ThreadedConnectionPool | None = None
+_pool_lock = threading.Lock()
 
 
-def _get_pool() -> pg_pool.SimpleConnectionPool:
+def _get_pool() -> pg_pool.ThreadedConnectionPool:
     global _pool
     if _pool is None:
-        dsn = os.environ.get("DATABASE_URL")
-        if not dsn:
-            raise RuntimeError(
-                "DATABASE_URL is not set. On Railway use the Supabase "
-                "connection-pooler string (IPv4), not the direct db host."
-            )
-        _pool = pg_pool.SimpleConnectionPool(1, 5, dsn)
+        with _pool_lock:
+            if _pool is None:  # re-check: another thread may have won the race
+                dsn = os.environ.get("DATABASE_URL")
+                if not dsn:
+                    raise RuntimeError(
+                        "DATABASE_URL is not set. On Railway use the Supabase "
+                        "connection-pooler string (IPv4), not the direct db host."
+                    )
+                _pool = pg_pool.ThreadedConnectionPool(1, 10, dsn)
     return _pool
 
 
@@ -75,6 +82,16 @@ def init_db():
                     parent_id    INTEGER REFERENCES articles(id)
                 )
             """)
+            # Canonical link to the original article. `from_addr` was carrying
+            # the *feed* URL for every RSS row, which is not something a reader
+            # can follow, so link-outs need their own column.
+            cur.execute("ALTER TABLE articles ADD COLUMN IF NOT EXISTS url TEXT")
+            # Backfill: message_id is the entry's permalink/GUID and is a usable
+            # URL on every existing row.
+            cur.execute("""
+                UPDATE articles SET url = message_id
+                WHERE url IS NULL AND message_id LIKE 'http%'
+            """)
             cur.execute("CREATE INDEX IF NOT EXISTS idx_date ON articles(date DESC)")
             cur.execute("CREATE INDEX IF NOT EXISTS idx_source ON articles(source)")
             cur.execute("""
@@ -105,12 +122,13 @@ def insert_article(a: dict):
         with conn.cursor() as cur:
             cur.execute("""
                 INSERT INTO articles
-                    (message_id, source, subject, date, body, from_addr, image_url, parent_id)
+                    (message_id, source, subject, date, body, from_addr, image_url, parent_id, url)
                 VALUES
                     (%(message_id)s, %(source)s, %(subject)s, %(date)s, %(body)s,
-                     %(from_addr)s, %(image_url)s, %(parent_id)s)
+                     %(from_addr)s, %(image_url)s, %(parent_id)s, %(url)s)
                 ON CONFLICT (message_id) DO NOTHING
-            """, {**a, "image_url": a.get("image_url"), "parent_id": a.get("parent_id")})
+            """, {**a, "image_url": a.get("image_url"), "parent_id": a.get("parent_id"),
+                  "url": a.get("url") or a.get("message_id")})
 
 
 def get_article_by_id(article_id: int) -> dict | None:
@@ -137,7 +155,13 @@ def get_recent_articles(limit: int = 40, source: str | None = None) -> list[dict
             return [dict(r) for r in cur.fetchall()]
 
 
-def get_articles_since(days: int = 30) -> list[dict]:
+def get_articles_since(days: int = 30, limit: int = 150) -> list[dict]:
+    """Most recent `limit` articles from the last `days`.
+
+    The limit is not optional cosmetics: without it the Q&A context grows with
+    the archive and eventually exceeds the model's context window (and costs
+    dollars per question). Newest-first, so the cap drops the stalest rows.
+    """
     cutoff = (datetime.now(timezone.utc) - timedelta(days=days)).strftime("%Y-%m-%dT%H:%M:%SZ")
     with _conn() as conn:
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
@@ -145,8 +169,9 @@ def get_articles_since(days: int = 30) -> list[dict]:
                 """SELECT * FROM articles
                    WHERE date >= %s
                    AND (is_digest IS NULL OR is_digest = 0)
-                   ORDER BY date DESC""",
-                (cutoff,)
+                   ORDER BY date DESC
+                   LIMIT %s""",
+                (cutoff, limit)
             )
             return [dict(r) for r in cur.fetchall()]
 
@@ -196,61 +221,11 @@ def get_unsummarised(limit: int = 100) -> list[dict]:
             return [dict(r) for r in cur.fetchall()]
 
 
-def get_unextracted_newsletters(limit: int = 20) -> list[dict]:
-    """Return newsletter digests that haven't been split into individual stories yet."""
-    with _conn() as conn:
-        with conn.cursor(cursor_factory=RealDictCursor) as cur:
-            cur.execute(
-                """SELECT * FROM articles
-                   WHERE parent_id IS NULL
-                   AND (is_digest IS NULL OR is_digest = 0)
-                   AND length(body) > 2000
-                   ORDER BY date DESC LIMIT %s""",
-                (limit,)
-            )
-            return [dict(r) for r in cur.fetchall()]
-
-
-def mark_as_digest(article_id: int):
-    """Hide a newsletter parent from the feed once its stories have been extracted."""
-    with _conn() as conn:
-        with conn.cursor() as cur:
-            cur.execute("UPDATE articles SET is_digest = 1 WHERE id = %s", (article_id,))
-
-
 def count_articles() -> int:
     with _conn() as conn:
         with conn.cursor() as cur:
             cur.execute("SELECT COUNT(*) FROM articles")
             return cur.fetchone()[0]
-
-
-def debug_stats() -> dict:
-    with _conn() as conn:
-        with conn.cursor(cursor_factory=RealDictCursor) as cur:
-            cur.execute("SELECT COUNT(*) AS n FROM articles")
-            total = cur.fetchone()["n"]
-            cur.execute("SELECT COUNT(*) AS n FROM articles WHERE is_digest = 1")
-            digests = cur.fetchone()["n"]
-            cur.execute("SELECT COUNT(*) AS n FROM articles WHERE parent_id IS NOT NULL")
-            children = cur.fetchone()["n"]
-            cur.execute(
-                "SELECT COUNT(*) AS n FROM articles WHERE parent_id IS NULL "
-                "AND (is_digest IS NULL OR is_digest = 0) AND length(body) > 2000"
-            )
-            unextracted = cur.fetchone()["n"]
-            cur.execute(
-                "SELECT id, source, subject, is_digest, parent_id, length(body) AS body_len "
-                "FROM articles ORDER BY id DESC LIMIT 10"
-            )
-            sample = [dict(r) for r in cur.fetchall()]
-    return {
-        "total": total,
-        "digests_marked": digests,
-        "child_stories": children,
-        "unextracted_newsletters": unextracted,
-        "recent_10": sample,
-    }
 
 
 def get_meta(key: str) -> str | None:

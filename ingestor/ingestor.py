@@ -9,6 +9,7 @@ Sources are configured in config.json:
 """
 
 import json
+import os
 import logging
 import re
 import sys
@@ -57,7 +58,13 @@ def enrich(article: dict, message_id: str):
 
     Headline-only items (short/empty body) are skipped — there is nothing to
     summarise and it avoids burning Claude calls on link-outs.
+
+    Set ENRICH_ON_INGEST=0 to ingest without any model calls; the app's capped
+    startup backfill then catches up at a bounded rate. Useful when refilling a
+    stale archive, where enriching inline would fire hundreds of calls at once.
     """
+    if os.environ.get("ENRICH_ON_INGEST", "1") == "0":
+        return
     if len((article.get("body") or "")) < MIN_BODY_FOR_SUMMARY:
         return
     try:
@@ -138,7 +145,8 @@ def fetch_rss(feed_cfg: dict) -> int:
             "subject":    entry.get("title", "(no title)"),
             "date":       date,
             "body":       body,
-            "from_addr":  url,
+            "from_addr":  url,                                  # the feed
+            "url":        entry.get("link") or message_id,      # the article
             "image_url":  image_url,
         }
         insert_article(article)
@@ -151,6 +159,45 @@ def fetch_rss(feed_cfg: dict) -> int:
 
 
 # ── GDELT global news index ───────────────────────────────────────────────────
+
+# GDELT matches an article's full text, and `sourcecountry:` matches where the
+# *outlet* is based — not what the story is about. African news sites carry a lot
+# of syndicated wire copy, so a query for "trade" or "funding" happily returns US
+# baseball trades and golf tours. This gate reads the headline, which is the one
+# field that reliably describes the story.
+GDELT_SIGNAL = {
+    "startup", "startups", "fintech", "funding", "funded", "raise", "raises", "raised",
+    "venture", "vc", "seed", "series", "investment", "investor", "investors", "invests",
+    "acquisition", "acquires", "acquired", "merger", "ipo", "listing", "valuation",
+    "bank", "banking", "lender", "loan", "credit", "payments", "payment", "wallet",
+    "economy", "economic", "inflation", "gdp", "currency", "naira", "cedi", "rand",
+    "shilling", "forex", "exchange", "tariff", "export", "exports", "import", "imports",
+    "trade", "tax", "budget", "revenue", "policy", "regulator", "regulation", "licence",
+    "license", "telecom", "broadband", "data", "digital", "tech", "technology", "ai",
+    "energy", "solar", "power", "grid", "logistics", "agritech", "healthtech",
+    "ecommerce", "commerce", "manufacturing", "infrastructure", "mining", "oil", "gas",
+}
+
+# Headlines containing these are wire/sports/lifestyle filler that African outlets
+# syndicate. A single hit rejects the item regardless of other signal.
+GDELT_NOISE = {
+    "vs", "nba", "nfl", "mlb", "nhl", "premier", "fixture", "fixtures", "kickoff",
+    "golf", "tourney", "tournament", "striker", "midfielder", "goalkeeper", "transfer",
+    "match", "matchup", "innings", "touchdown", "playoff", "playoffs", "horoscope",
+    "celebrity", "netflix", "recipe", "lottery", "betting", "odds", "predictions",
+}
+
+_WORD_RE = re.compile(r"[a-z]+")
+
+
+def is_relevant_headline(title: str) -> bool:
+    words = set(_WORD_RE.findall((title or "").lower()))
+    if not words:
+        return False
+    if words & GDELT_NOISE:
+        return False
+    return bool(words & GDELT_SIGNAL)
+
 
 def parse_gdelt_date(s: str) -> str:
     """GDELT seendate format is e.g. 20260615T123000Z."""
@@ -174,31 +221,44 @@ def fetch_gdelt(query_cfg: dict, gdelt_cfg: dict) -> int:
     }
     log.info("Polling GDELT: %s", name)
 
-    # GDELT rate-limits aggressively (HTTP 429). Retry with linear backoff.
+    # GDELT signals rate limiting two different ways: a real HTTP 429, and an
+    # HTTP 200 whose body is the plain-text "Please limit requests…" notice.
+    # Retry on both.
     resp = None
     for attempt in range(1, 4):
         resp = requests.get(
             GDELT_ENDPOINT, params=params, timeout=30,
-            headers={"User-Agent": "SourcingAfrica/1.0"},
+            headers={"User-Agent": "Mozilla/5.0 (compatible; SourcingAfrica/1.0)"},
         )
-        if resp.status_code == 429:
-            wait = 5 * attempt
-            log.warning("GDELT 429 (rate-limited) on '%s' — backing off %ds (attempt %d/3)", name, wait, attempt)
+        throttled = resp.status_code == 429 or resp.text.lstrip().startswith("Please limit")
+        if throttled and attempt < 3:
+            wait = 10 * attempt
+            log.warning("GDELT rate-limited on '%s' — backing off %ds (attempt %d/3)", name, wait, attempt)
             time.sleep(wait)
             continue
         break
     resp.raise_for_status()
-    try:
-        data = resp.json()
-    except ValueError:
-        # GDELT occasionally returns an HTML error page with a 200 status
-        log.warning("GDELT returned non-JSON for '%s' — skipping this cycle", name)
-        return 0
+
+    body = resp.text.lstrip()
+    if not body.startswith(("{", "[")):
+        # A malformed query returns HTTP 200 with a plain-text explanation, e.g.
+        # "You put quotes around a parameter that does not accept quotes." This
+        # used to be logged as a warning and skipped, so two permanently broken
+        # queries went unnoticed for months. Raise: a query that can never
+        # succeed is a bug, not a bad cycle.
+        raise RuntimeError(f"GDELT rejected query '{name}': {body[:200]}")
+    data = resp.json()
 
     new_count = 0
+    skipped = 0
     for art in data.get("articles", []):
         url = art.get("url", "")
         if not url or article_exists(url):
+            continue
+
+        title = art.get("title", "")
+        if not is_relevant_headline(title):
+            skipped += 1
             continue
 
         domain = art.get("domain", "") or "GDELT"
@@ -209,6 +269,7 @@ def fetch_gdelt(query_cfg: dict, gdelt_cfg: dict) -> int:
             "date":       parse_gdelt_date(art.get("seendate", "")),
             "body":       "",  # headline-only
             "from_addr":  url,
+            "url":        url,
             "image_url":  art.get("socialimage") or None,
         }
         insert_article(article)
@@ -223,6 +284,8 @@ def fetch_gdelt(query_cfg: dict, gdelt_cfg: dict) -> int:
         new_count += 1
         log.info("Stored GDELT: [%s] %s", domain, art.get("title", "")[:80])
 
+    if skipped:
+        log.info("GDELT '%s': kept %d, filtered %d off-topic headline(s)", name, new_count, skipped)
     return new_count
 
 

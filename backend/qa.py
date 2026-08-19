@@ -12,9 +12,51 @@ log = logging.getLogger(__name__)
 
 from backend.db import (
     get_recent_articles, get_articles_since, get_meta, set_meta,
-    save_tags, get_untagged, get_unextracted_newsletters, mark_as_digest,
-    insert_article,
+    save_tags, get_untagged,
 )
+
+# Current Opus. Same price as the 4.6 this used to pin, three generations newer.
+DEFAULT_MODEL = "claude-opus-5"
+
+# Hard ceiling on the archive we hand Claude for a question. Bodies are ~700
+# chars each, so this keeps a question well inside the context window and at a
+# predictable cost no matter how large the archive grows.
+QA_MAX_ARTICLES = 120
+QA_CHARS_PER_ARTICLE = 1200
+QA_MAX_CONTEXT_CHARS = 220_000
+
+# Mirrors the ingestor: below this there is nothing to summarise.
+MIN_BODY_FOR_SUMMARY = 400
+
+
+def _model() -> str:
+    return os.environ.get("CLAUDE_MODEL", DEFAULT_MODEL)
+
+
+def _text(msg) -> str:
+    """First text block of a response.
+
+    Not `msg.content[0].text` — on current models content[0] is a thinking
+    block, so indexing blindly raises AttributeError.
+    """
+    for block in msg.content:
+        if getattr(block, "type", None) == "text":
+            return block.text.strip()
+    return ""
+
+
+def _strip_fence(raw: str) -> str:
+    """Unwrap ```json ... ``` fencing if the model added it."""
+    raw = raw.strip()
+    if not raw.startswith("```"):
+        return raw
+    parts = raw.split("```")
+    if len(parts) < 2:
+        return raw
+    body = parts[1]
+    if body.lstrip().lower().startswith("json"):
+        body = body.lstrip()[4:]
+    return body.strip()
 
 
 TOP5_SYSTEM = """You are a signal analyst for Sourcing Africa using the ADE Framework to rank African tech and business stories.
@@ -116,18 +158,14 @@ def get_top5() -> list[dict]:
     client = anthropic.Anthropic(api_key=api_key)
     try:
         msg = client.messages.create(
-            model=os.environ.get("CLAUDE_MODEL", "claude-opus-4-6"),
-            max_tokens=300,
+            model=_model(),
+            max_tokens=1500,
             system=TOP5_SYSTEM,
             messages=[{"role": "user", "content": f"Articles:\n{article_list}"}],
         )
-        raw = msg.content[0].text.strip()
+        raw = _strip_fence(_text(msg))
         log.info("get_top5 Claude raw: %s", raw[:300])
-        if raw.startswith("```"):
-            raw = raw.split("```")[1]
-            if raw.startswith("json"):
-                raw = raw[4:]
-        picks = json.loads(raw.strip())
+        picks = json.loads(raw)
         if isinstance(picks, list):
             result = []
             for p in picks[:5]:
@@ -194,6 +232,11 @@ def summarize_article(article: dict, save: bool = False) -> dict:
         except Exception:
             pass
 
+    # Headline-only items (GDELT link-outs) have no body. Summarising nothing
+    # produces a confident invention, so refuse rather than hallucinate.
+    if len((article.get("body") or "").strip()) < MIN_BODY_FOR_SUMMARY:
+        return {"error": "headline_only"}
+
     api_key = os.environ.get("ANTHROPIC_API_KEY")
     if not api_key:
         return {"error": "ANTHROPIC_API_KEY not set"}
@@ -206,18 +249,14 @@ def summarize_article(article: dict, save: bool = False) -> dict:
         f"{article['body'][:3000]}"
     )
     msg = client.messages.create(
-        model=os.environ.get("CLAUDE_MODEL", "claude-opus-4-6"),
-        max_tokens=500,
+        model=_model(),
+        max_tokens=1500,
         system=SUMMARIZE_SYSTEM,
         messages=[{"role": "user", "content": content}],
     )
     try:
-        raw = msg.content[0].text.strip()
-        if raw.startswith("```"):
-            raw = raw.split("```")[1]
-            if raw.startswith("json"):
-                raw = raw[4:]
-        result = json.loads(raw.strip())
+        raw = _strip_fence(_text(msg))
+        result = json.loads(raw)
         if save and article.get("id"):
             save_summary(article["id"], json.dumps(result))
         return result
@@ -267,18 +306,14 @@ def generate_suggestions() -> list[str]:
 
     client = anthropic.Anthropic(api_key=api_key)
     msg = client.messages.create(
-        model=os.environ.get("CLAUDE_MODEL", "claude-opus-4-6"),
+        model=_model(),
         max_tokens=200,
         system=SUGGESTIONS_SYSTEM,
         messages=[{"role": "user", "content": f"Recent newsletter topics:\n{topics}"}],
     )
     try:
-        raw = msg.content[0].text.strip()
-        if raw.startswith("```"):
-            raw = raw.split("```")[1]
-            if raw.startswith("json"):
-                raw = raw[4:]
-        result = json.loads(raw.strip())
+        raw = _strip_fence(_text(msg))
+        result = json.loads(raw)
         if isinstance(result, list):
             suggestions = [str(s) for s in result[:4]]
             set_meta("suggestions_json", json.dumps(suggestions))
@@ -310,17 +345,13 @@ def tag_article(article: dict, save: bool = False) -> dict:
     content = f"Title: {article['subject']}\n\n{article['body'][:600]}"
     try:
         msg = client.messages.create(
-            model=os.environ.get("CLAUDE_MODEL", "claude-opus-4-6"),
+            model=_model(),
             max_tokens=60,
             system=TAG_SYSTEM,
             messages=[{"role": "user", "content": content}],
         )
-        raw = msg.content[0].text.strip()
-        if raw.startswith("```"):
-            raw = raw.split("```")[1]
-            if raw.startswith("json"):
-                raw = raw[4:]
-        result = json.loads(raw.strip())
+        raw = _strip_fence(_text(msg))
+        result = json.loads(raw)
         if save and article.get("id"):
             save_tags(article["id"], json.dumps(result))
         return result
@@ -329,99 +360,9 @@ def tag_article(article: dict, save: bool = False) -> dict:
         return {}
 
 
-EXTRACT_STORIES_SYSTEM = """You extract individual news stories from African newsletter digests.
-
-Given a newsletter body, identify and return each distinct story it contains.
-Return ONLY a JSON array:
-[{"headline": "<concise story title, ≤ 12 words>", "body": "<story text, max 400 words>"}, ...]
-
-Rules:
-- Each element = ONE story (one event, one company, one policy move, one data point)
-- Do not combine unrelated items into one entry
-- Skip boilerplate: ads, subscription CTAs, unsubscribe links, navigation menus
-- Return 2–8 stories per newsletter
-- No markdown, valid JSON only"""
-
-
-def extract_stories(article: dict) -> list[dict]:
-    """Split a newsletter article into individual story dicts ready for insert_article."""
-    import json
-
-    api_key = os.environ.get("ANTHROPIC_API_KEY")
-    if not api_key:
-        return []
-
-    client = anthropic.Anthropic(api_key=api_key)
-    content = f"Source: {article['source']}\nDate: {article['date'][:10]}\n\n{article['body'][:6000]}"
-    try:
-        msg = client.messages.create(
-            model=os.environ.get("CLAUDE_MODEL", "claude-opus-4-6"),
-            max_tokens=4000,
-            system=EXTRACT_STORIES_SYSTEM,
-            messages=[{"role": "user", "content": content}],
-        )
-        raw = msg.content[0].text.strip()
-        if raw.startswith("```"):
-            raw = raw.split("```")[1]
-            if raw.startswith("json"):
-                raw = raw[4:]
-        stories = json.loads(raw.strip())
-        if not isinstance(stories, list):
-            return []
-        parent_id = article.get("id")
-        result = []
-        for i, s in enumerate(stories):
-            headline = s.get("headline", "").strip()
-            body = s.get("body", "").strip()
-            if not headline or not body:
-                continue
-            result.append({
-                "message_id": f"story:{parent_id}:{i}",
-                "source":     article["source"],
-                "subject":    headline,
-                "date":       article["date"],
-                "body":       body,
-                "from_addr":  article.get("from_addr", ""),
-                "image_url":  article.get("image_url"),
-                "parent_id":  parent_id,
-            })
-        return result
-    except Exception as exc:
-        log.error("extract_stories failed for '%s': %s", article.get("subject", "")[:60], exc)
-        return []
-
-
-def backfill_stories():
-    """Split all unextracted newsletter digests into individual story articles."""
-    from backend.db import get_article_id
-
-    newsletters = get_unextracted_newsletters(limit=20)
-    if not newsletters:
-        return
-    log.info("Extracting stories from %d newsletter(s)…", len(newsletters))
-    for newsletter in newsletters:
-        stories = extract_stories(newsletter)
-        if stories:
-            for s in stories:
-                insert_article(s)
-                try:
-                    article_id = get_article_id(s["message_id"])
-                    if article_id:
-                        s["id"] = article_id
-                        tag_article(s, save=True)
-                except Exception:
-                    pass
-            mark_as_digest(newsletter["id"])
-            log.info("Extracted %d stories from: %s", len(stories), newsletter["subject"][:60])
-        else:
-            # Mark as digest to avoid re-processing
-            mark_as_digest(newsletter["id"])
-            log.warning("No stories extracted from: %s", newsletter["subject"][:60])
-
-
-def backfill_tags():
-    """Generate tags for all articles that don't have them yet."""
-    articles = get_untagged(limit=100)
+def backfill_tags(limit: int = 100):
+    """Generate tags for articles that don't have them yet."""
+    articles = get_untagged(limit=limit)
     if not articles:
         return
     log.info("Backfilling tags for %d article(s)…", len(articles))
@@ -431,12 +372,10 @@ def backfill_tags():
             log.info("Tagged: %s → %s/%s", a["subject"][:50], result.get("country"), result.get("topic"))
 
 
-def backfill_summaries():
-    """Generate and cache summaries for all articles that don't have one yet."""
-    import logging
+def backfill_summaries(limit: int = 100):
+    """Generate and cache summaries for articles that don't have one yet."""
     from backend.db import get_unsummarised
-    log = logging.getLogger(__name__)
-    articles = get_unsummarised(limit=100)
+    articles = get_unsummarised(limit=limit)
     if not articles:
         return
     log.info("Backfilling summaries for %d article(s)…", len(articles))
@@ -444,43 +383,70 @@ def backfill_summaries():
         result = summarize_article(a, save=True)
         if "error" not in result:
             log.info("Summarised: %s", a["subject"][:60])
-        else:
+        elif result["error"] != "headline_only":
             log.warning("Failed to summarise article %d: %s", a["id"], result["error"])
 
 
-SYSTEM = """You are a knowledgeable assistant for Sourcing Africa, a personal intelligence tool
+SYSTEM = """You are a knowledgeable assistant for Sourcing Africa, an intelligence tool
 tracking African tech, business, and macro trends.
 
-You have access to a curated archive of newsletters from Semafor Africa, Bloomberg Africa,
-and Tech Safari. Answer questions directly and concisely based on the provided articles.
+You are given a slice of a curated archive built from African tech and business
+publications (TechCabal, Techpoint Africa, Nairametrics, Rest of World, The Africa
+Report, African Business and others) plus the GDELT global news index.
 
 Rules:
+- Answer only from the articles provided. The archive slice is recent but partial —
+  if it does not cover the question, say so plainly rather than filling the gap.
 - Cite your sources: after each key claim, note (Source Name, date)
-- If the archive doesn't cover the question, say so plainly
 - Be direct — the user reads on mobile, keep answers tight
-- When relevant, note patterns across sources (e.g. multiple outlets covering the same story)"""
+- When relevant, note patterns across sources (e.g. multiple outlets covering the same story)
+- If you used web search, label those facts (Web)"""
 
 
-def web_search(query: str, max_results: int = 5) -> list[dict]:
-    try:
-        from duckduckgo_search import DDGS
-        with DDGS() as ddgs:
-            return list(ddgs.text(query + " Africa", max_results=max_results))
-    except Exception:
-        return []
+# Claude's server-side web search. The old duckduckgo_search dependency was
+# renamed upstream to `ddgs` and now returns zero results for every query, so
+# the "live web" half of an answer had been silently dead.
+WEB_SEARCH_TOOL = {
+    "type": "web_search_20260209",
+    "name": "web_search",
+    "max_uses": 3,
+}
+
+
+def _all_text(msg) -> str:
+    """Concatenate every text block — with web search the model may emit text
+    before and after a search, and only joining them gives a whole answer."""
+    parts = [b.text.strip() for b in msg.content
+             if getattr(b, "type", None) == "text" and b.text.strip()]
+    return "\n\n".join(parts)
+
+
+def _count_searches(msg) -> int:
+    return sum(1 for b in msg.content
+               if getattr(b, "type", None) == "server_tool_use"
+               and getattr(b, "name", "") == "web_search")
 
 
 def build_context(articles: list[dict]) -> str:
-    lines = []
-    for a in articles:
-        date = a["date"][:10]
-        lines.append(
+    """Render articles as context, stopping at a hard character budget.
+
+    Both caps matter: per-article truncation keeps one long piece from crowding
+    out the rest, and the total budget keeps the request inside the context
+    window (and at a predictable price) however large the archive grows.
+    """
+    lines, used = [], 0
+    for a in articles[:QA_MAX_ARTICLES]:
+        block = (
             f"---\n"
             f"SOURCE: {a['source']}\n"
-            f"DATE: {date}\n"
+            f"DATE: {a['date'][:10]}\n"
             f"SUBJECT: {a['subject']}\n"
-            f"CONTENT:\n{a['body'][:1500]}\n"
+            f"CONTENT:\n{(a.get('body') or '')[:QA_CHARS_PER_ARTICLE]}\n"
         )
+        if used + len(block) > QA_MAX_CONTEXT_CHARS:
+            break
+        lines.append(block)
+        used += len(block)
     return "\n".join(lines)
 
 
@@ -502,25 +468,12 @@ def answer(question: str, days: int = 30, messages: list[dict] | None = None) ->
     archive_context = build_context(articles)
     today = datetime.now(timezone.utc).strftime("%d %B %Y")
 
-    # Web search based on the latest question
-    web_results = web_search(question)
-    web_context = ""
-    if web_results:
-        web_lines = []
-        for r in web_results:
-            web_lines.append(
-                f"TITLE: {r.get('title', '')}\n"
-                f"SOURCE: {r.get('href', '')}\n"
-                f"SNIPPET: {r.get('body', '')}"
-            )
-        web_context = "\n\n--- LIVE WEB RESULTS ---\n" + "\n\n".join(web_lines)
-
     context_prefix = (
         f"Today is {today}.\n\n"
-        f"--- NEWSLETTER ARCHIVE (past {days} days) ---\n"
-        f"{archive_context}"
-        f"{web_context}\n\n"
-        "Answer using the archive first. Use web results to fill gaps or add recency. "
+        f"--- ARCHIVE (most recent {len(articles)} articles, past {days} days) ---\n"
+        f"{archive_context}\n\n"
+        "Answer from the archive first. If the archive doesn't cover it, or the "
+        "question needs something more recent, use web search to fill the gap. "
         "Label web-sourced facts with (Web) and archive facts with the source name and date."
     )
 
@@ -544,15 +497,23 @@ def answer(question: str, days: int = 30, messages: list[dict] | None = None) ->
         }]
 
     client = anthropic.Anthropic(api_key=api_key)
-    msg = client.messages.create(
-        model=os.environ.get("CLAUDE_MODEL", "claude-opus-4-6"),
-        max_tokens=1024,
+    kwargs = dict(
+        model=_model(),
+        max_tokens=4096,
         system=SYSTEM,
         messages=api_messages,
     )
+    try:
+        msg = client.messages.create(tools=[WEB_SEARCH_TOOL], **kwargs)
+    except anthropic.BadRequestError as exc:
+        # Older//self-hosted model pins may not carry the server-side search
+        # tool. The archive answer is still worth returning without it.
+        log.warning("web_search unavailable, answering from archive only: %s", exc)
+        msg = client.messages.create(**kwargs)
+
     return {
-        "answer": msg.content[0].text.strip(),
+        "answer": _all_text(msg),
         "article_count": len(articles),
         "days_covered": days,
-        "web_results": len(web_results),
+        "web_results": _count_searches(msg),
     }

@@ -1,0 +1,22 @@
+# The Dockerfile does `COPY . .`, so anything not excluded here lands in an
+# image layer. Railway builds from GitHub (where .env is gitignored) and is
+# unaffected, but a local `docker build .` would otherwise bake real secrets
+# into the image — and image layers are not a place secrets can be deleted from.
+.env
+.env.*
+!.env.example
+ingestor/credentials.json
+ingestor/token.json
+
+# Build weight — none of this belongs in the image
+.venv/
+venv/
+__pycache__/
+*.pyc
+.git/
+.gitignore
+node_modules/
+data/
+scripts/
+README.md
+.claude/

@@ -38,19 +38,25 @@ function dateGroup(isoStr) {
   return 'Earlier';
 }
 
-// Source → accent color
+// Source -> accent color. Keyed to the feeds actually in config.json.
 const SOURCE_COLORS = {
-  semafor:   '#2dd4bf',  // teal
-  bloomberg: '#60a5fa',  // blue
-  safari:    '#fb923c',  // orange
-  techcabal: '#a78bfa',  // purple
+  techcabal:   '#a78bfa',
+  techpoint:   '#2dd4bf',
+  nairametrics:'#60a5fa',
+  restofworld: '#fb923c',
+  africareport:'#f472b6',
+  africanbusiness: '#facc15',
+  techcrunch:  '#34d399',
 };
 function sourceColor(name = '') {
   const n = name.toLowerCase();
-  if (n.includes('semafor'))               return SOURCE_COLORS.semafor;
-  if (n.includes('bloomberg'))             return SOURCE_COLORS.bloomberg;
-  if (n.includes('safari'))                return SOURCE_COLORS.safari;
-  if (n.includes('techcabal') || n.includes('tech cabal')) return SOURCE_COLORS.techcabal;
+  if (n.includes('techcabal'))      return SOURCE_COLORS.techcabal;
+  if (n.includes('techpoint'))      return SOURCE_COLORS.techpoint;
+  if (n.includes('nairametrics'))   return SOURCE_COLORS.nairametrics;
+  if (n.includes('rest of world'))  return SOURCE_COLORS.restofworld;
+  if (n.includes('africa report'))  return SOURCE_COLORS.africareport;
+  if (n.includes('african business')) return SOURCE_COLORS.africanbusiness;
+  if (n.includes('techcrunch'))     return SOURCE_COLORS.techcrunch;
   return 'var(--accent)';
 }
 
@@ -115,10 +121,13 @@ function tagBubbles(country, topic) {
 }
 
 function cardThumb(imageUrl, source, color) {
-  if (imageUrl) {
-    return `<div class="card-thumb"><img src="${escHtml(imageUrl)}" alt="" loading="lazy" onerror="this.parentElement.innerHTML='<span>${escHtml(source[0]?.toUpperCase()||'?')}</span>';this.parentElement.style.background='${color}'"></div>`;
-  }
-  return `<div class="card-thumb" style="background:${color}"><span>${escHtml(source[0]?.toUpperCase() || '?')}</span></div>`;
+  // The initial always sits underneath, so a broken image just reveals it —
+  // no inline onerror handler building JS out of feed-supplied strings.
+  const initial = escHtml(source?.[0]?.toUpperCase() || '?');
+  const img = imageUrl
+    ? `<img src="${escHtml(imageUrl)}" alt="" loading="lazy" onerror="this.remove()">`
+    : '';
+  return `<div class="card-thumb" style="background:${color}"><span>${initial}</span>${img}</div>`;
 }
 
 // ── Status + freshness ────────────────────────────────────────────────────────
@@ -128,7 +137,7 @@ const statusDot      = document.getElementById('statusDot');
 
 async function checkStatus() {
   try {
-    const r = await fetch('/api/status');
+    const r = await apiFetch('/api/status');
     if (r.ok) {
       const d = await r.json();
       // Populate landing-hero live stats (no-ops if hero isn't present)
@@ -178,7 +187,7 @@ const suggestionsBox = document.getElementById('suggestionsBox');
 const FALLBACK_CHIPS = [
   'What happened in Nigerian fintech this week?',
   'Any new funding rounds in East Africa?',
-  'Summarise the latest Bloomberg Africa issue',
+  'What is happening in African energy infrastructure?',
   'What macro trends should I watch?',
 ];
 
@@ -199,7 +208,7 @@ function renderChips(suggestions) {
 
 async function loadSuggestions() {
   try {
-    const r = await fetch('/api/suggestions');
+    const r = await apiFetch('/api/suggestions');
     if (r.ok) {
       const d = await r.json();
       if (d.suggestions && d.suggestions.length > 0) {
@@ -279,7 +288,7 @@ async function sendQuestion() {
   const metaDiv = assistantDiv.querySelector('.msg-meta');
 
   try {
-    const r = await fetch('/api/ask', {
+    const r = await apiFetch('/api/ask', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -348,7 +357,7 @@ async function loadTop5() {
   list.innerHTML = skeletonCards(5);
 
   try {
-    const r = await fetch('/api/top5');
+    const r = await apiFetch('/api/top5');
     if (!r.ok) throw new Error('Failed');
     const { stories } = await r.json();
 
@@ -394,7 +403,7 @@ async function loadFeed(source = '') {
 
   try {
     const url = `/api/articles?limit=30${source ? `&source=${encodeURIComponent(source)}` : ''}`;
-    const r = await fetch(url);
+    const r = await apiFetch(url);
     const data = await r.json();
     renderFeed(data.articles);
 
@@ -459,7 +468,7 @@ function renderFeed(articles) {
 
 async function buildFilters() {
   try {
-    const r = await fetch('/api/sources');
+    const r = await apiFetch('/api/sources');
     const { sources } = await r.json();
     const bar = document.querySelector('.filter-bar');
 
@@ -500,14 +509,15 @@ async function openArticle(id) {
   document.getElementById('modalTitle').textContent    = 'Loading…';
   document.getElementById('modalSource').textContent   = '';
   document.getElementById('modalDate').textContent     = '';
+  document.getElementById('modalLink').hidden          = true;
   document.getElementById('summaryLoading').hidden     = false;
   document.getElementById('summaryLoading').textContent = 'Summarising…';
   document.getElementById('summaryContent').hidden     = true;
 
   try {
     const [metaRes, summaryRes] = await Promise.all([
-      fetch(`/api/articles/${id}`),
-      fetch(`/api/articles/${id}/summary`),
+      apiFetch(`/api/articles/${id}`),
+      apiFetch(`/api/articles/${id}/summary`),
     ]);
     const a = await metaRes.json();
 
@@ -519,7 +529,7 @@ async function openArticle(id) {
 
     const hero = document.getElementById('modalHero');
     if (a.image_url) {
-      hero.style.backgroundImage = `url(${a.image_url})`;
+      hero.style.backgroundImage = `url("${String(a.image_url).replace(/["'\\)]/g, '')}")`;
       hero.hidden = false;
     } else {
       hero.hidden = true;
@@ -527,6 +537,28 @@ async function openArticle(id) {
 
     document.getElementById('modalTags').innerHTML = tagBubbles(a.country, a.topic);
 
+    // Link to the original. Every story here belongs to the outlet that
+    // reported it — the reader needs a way through, and the outlet needs the
+    // traffic for republishing their feed to be fair.
+    const linkEl = document.getElementById('modalLink');
+    if (a.url) {
+      linkEl.href = a.url;
+      linkEl.textContent = `Read the full story at ${a.source} ↗`;
+      linkEl.hidden = false;
+    } else {
+      linkEl.hidden = true;
+    }
+
+    if (summaryRes.status === 422) {
+      // Headline-only item (GDELT link-out): there is no body to summarise, and
+      // inventing one would be worse than saying so.
+      document.getElementById('summaryLoading').hidden = false;
+      document.getElementById('summaryLoading').textContent =
+        a.url ? 'Headline only — read the full story at the source.'
+              : 'Headline only — no full text available.';
+      document.getElementById('summaryContent').hidden = true;
+      return;
+    }
     if (!summaryRes.ok) throw new Error('Summary failed');
     const s = await summaryRes.json();
 

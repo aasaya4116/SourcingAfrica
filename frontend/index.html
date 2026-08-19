@@ -20,6 +20,26 @@
 </head>
 <body>
 
+  <!-- ── Sign-in gate ── -->
+  <div class="auth-gate" id="authGate" hidden>
+    <div class="auth-card">
+      <div class="auth-mark">SA</div>
+      <h1 class="auth-title">Sourcing Africa</h1>
+      <p class="auth-sub">African business &amp; tech, distilled daily.</p>
+      <form class="auth-form" id="authForm">
+        <input
+          type="email"
+          id="authEmail"
+          placeholder="you@example.com"
+          autocomplete="email"
+          required
+        />
+        <button type="submit" id="authSubmit">Email me a sign-in link</button>
+      </form>
+      <p class="auth-msg" id="authMsg"></p>
+    </div>
+  </div>
+
   <header>
     <div class="header-inner">
       <span class="logo">Sourcing Africa</span>
@@ -172,10 +192,13 @@
             <span id="summarySoWhat"></span>
           </div>
         </div>
+        <a class="modal-link" id="modalLink" target="_blank" rel="noopener noreferrer" hidden></a>
       </div>
     </div>
   </div>
 
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+  <script src="/static/auth.js"></script>
   <script src="/static/app.js"></script>
 </body>
 </html>

@@ -2,32 +2,50 @@
   "poll_hours": 6,
   "rss": {
     "feeds": [
-      { "name": "TechCabal",        "url": "https://techcabal.com/feed/" },
-      { "name": "Techpoint Africa",  "url": "https://techpoint.africa/feed/" },
-      { "name": "Nairametrics",      "url": "https://nairametrics.com/feed/" },
-      { "name": "Rest of World",     "url": "https://restofworld.org/feed/latest/" },
-      { "name": "The Africa Report", "url": "https://www.theafricareport.com/feed/" },
-      { "name": "African Business",  "url": "https://african.business/feed" },
-      { "name": "TechCrunch Africa", "url": "https://techcrunch.com/tag/africa/feed/" }
+      {
+        "name": "TechCabal",
+        "url": "https://techcabal.com/feed/"
+      },
+      {
+        "name": "Techpoint Africa",
+        "url": "https://techpoint.africa/feed/"
+      },
+      {
+        "name": "Nairametrics",
+        "url": "https://nairametrics.com/feed/"
+      },
+      {
+        "name": "Rest of World",
+        "url": "https://restofworld.org/feed/latest/"
+      },
+      {
+        "name": "The Africa Report",
+        "url": "https://www.theafricareport.com/feed/"
+      },
+      {
+        "name": "African Business",
+        "url": "https://african.business/feed"
+      },
+      {
+        "name": "TechCrunch Africa",
+        "url": "https://techcrunch.com/tag/africa/feed/"
+      }
     ]
   },
   "gdelt": {
     "enabled": true,
-    "maxrecords": 75,
+    "maxrecords": 40,
     "timespan": "1d",
     "queries": [
       {
         "name": "GDELT — African Tech & Startups",
-        "query": "(startup OR fintech OR \"venture capital\" OR \"Series A\" OR funding) (sourcecountry:nigeria OR sourcecountry:kenya OR sourcecountry:\"south africa\" OR sourcecountry:egypt OR sourcecountry:ghana)"
+        "query": "(startup OR fintech OR \"venture capital\" OR \"Series A\" OR \"seed round\" OR \"funding round\" OR \"raises funding\") sourcelang:english (sourcecountry:nigeria OR sourcecountry:kenya OR sourcecountry:southafrica OR sourcecountry:egypt OR sourcecountry:ghana)"
       },
       {
         "name": "GDELT — African Business & Economy",
-        "query": "(economy OR investment OR trade OR acquisition OR IPO) (sourcecountry:nigeria OR sourcecountry:kenya OR sourcecountry:\"south africa\" OR sourcecountry:egypt OR sourcecountry:ghana OR sourcecountry:morocco)"
+        "query": "(\"central bank\" OR inflation OR \"foreign exchange\" OR \"economic growth\" OR acquisition OR IPO OR \"trade agreement\") sourcelang:english (sourcecountry:nigeria OR sourcecountry:kenya OR sourcecountry:southafrica OR sourcecountry:egypt OR sourcecountry:ghana OR sourcecountry:morocco)"
       }
-    ]
-  },
-  "analyst": {
-    "model": "claude-opus-4-6",
-    "context_articles": 40
+    ],
+    "query_gap_seconds": 8
   }
 }
