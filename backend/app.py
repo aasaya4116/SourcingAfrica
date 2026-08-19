@@ -317,6 +317,21 @@ def healthz():
 
 # ── Serve PWA (must come last) ────────────────────────────────────────────────
 
+# StaticFiles sends only etag/last-modified, no Cache-Control. Browsers then
+# apply *heuristic* caching and may serve a stale asset for hours without ever
+# asking the server — which meant a shipped fix could be invisible to someone
+# who had already loaded the broken version, with no way for them to tell.
+# `no-cache` does not mean "don't cache": it means "revalidate before use", so
+# the etag still short-circuits to a 304 and costs almost nothing.
+@app.middleware("http")
+async def revalidate_frontend(request, call_next):
+    response = await call_next(request)
+    path = request.url.path
+    if path.startswith("/static/") or path == "/" or not path.startswith("/api/"):
+        response.headers.setdefault("Cache-Control", "no-cache")
+    return response
+
+
 app.mount("/static", StaticFiles(directory=str(FRONTEND_DIR)), name="static")
 
 
