@@ -150,7 +150,10 @@ header {
 }
 
 /* ── Tab content ───────────────────────────────────────────────────── */
-.tab-content {
+/* :not([hidden]) — same trap as .auth-gate. Without it, all three tab panels
+   (Top 5 / Ask / Recent) render at once regardless of the `hidden` attribute
+   JS uses to switch tabs, stacked in document flow. */
+.tab-content:not([hidden]) {
   display: flex;
   flex-direction: column;
   height: calc(100dvh - 56px - 44px); /* full viewport minus header and tabs */
@@ -723,7 +726,10 @@ header {
 }
 
 /* ── Article modal ─────────────────────────────────────────────────── */
-.modal-overlay {
+/* :not([hidden]) — see the note on .auth-gate. Same trap: an unconditional
+   `display: flex` here out-ranks `[hidden]`, so JS setting
+   modalOverlay.hidden = true would not actually hide this full-screen layer. */
+.modal-overlay:not([hidden]) {
   position: fixed;
   inset: 0;
   background: rgba(0,0,0,0.85);
@@ -898,7 +904,12 @@ header {
 /* ── Sign-in gate ─────────────────────────────────────────────────────────── */
 body.locked { overflow: hidden; }
 
-.auth-gate {
+/* display is scoped to :not([hidden]) — an unconditional `display: flex` here
+   would out-rank the browser's built-in `[hidden] { display: none }` (author
+   CSS always beats the UA stylesheet, regardless of specificity), so setting
+   authGate.hidden = true from JS would do nothing and this full-screen layer
+   would sit over the app — visible or not — eating every click permanently. */
+.auth-gate:not([hidden]) {
   position: fixed;
   inset: 0;
   z-index: 200;
