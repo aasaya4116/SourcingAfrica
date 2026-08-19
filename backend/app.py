@@ -70,24 +70,34 @@ def _startup_backfill():
         log.warning("startup backfill failed (non-fatal): %s", exc)
 
 
-def _check_auth_config():
-    """Fail loudly at boot if auth is neither configured nor deliberately off.
+# Set at boot when auth can't be verified. Every data route already depends on
+# current_user, which refuses while this is true — so the deployment serves
+# nothing and the Anthropic key stays unspendable.
+AUTH_MISCONFIGURED = False
 
-    Otherwise a deploy missing SUPABASE_URL looks healthy and only reveals
-    itself as a 500 the first time someone signs in — which is exactly the
-    shape of bug that leaves an API key exposed on a URL you've shared.
+
+def _check_auth_config():
+    """Report whether auth is usable, without killing the process.
+
+    This used to raise, which crash-looped the container. That was safe but
+    undiagnosable: the only evidence was a traceback in the deploy log, and a
+    dead container can't tell you which variables it actually received. Booting
+    into a refusing state is equally safe and far easier to debug — /healthz
+    reports the config state, so one URL answers "did the variable arrive?".
     """
+    global AUTH_MISCONFIGURED
     if os.environ.get("AUTH_DISABLED", "0") == "1":
         log.warning(
             "AUTH_DISABLED=1 — every API endpoint is open. Local development only."
         )
         return
     if not (os.environ.get("SUPABASE_URL") or os.environ.get("SUPABASE_JWT_SECRET")):
-        raise RuntimeError(
-            "Auth is not configured. Set SUPABASE_URL (and SUPABASE_ANON_KEY) for "
-            "Supabase Auth, or set AUTH_DISABLED=1 for local development. "
-            "Refusing to start an unauthenticated deployment that holds an "
-            "Anthropic API key."
+        AUTH_MISCONFIGURED = True
+        log.error(
+            "AUTH NOT CONFIGURED — serving /healthz only; every data endpoint "
+            "will return 503. Set SUPABASE_URL (and SUPABASE_ANON_KEY) in this "
+            "service's variables, then redeploy. Visit /healthz to confirm what "
+            "this container actually received."
         )
 
 
@@ -286,8 +296,23 @@ def config():
 
 @app.get("/healthz")
 def healthz():
-    """Liveness probe for Railway. Deliberately does not touch the DB."""
-    return {"ok": True}
+    """Liveness probe for Railway, and the fastest way to diagnose a bad deploy.
+
+    Reports whether each required variable ARRIVED in this container — never
+    its value. A variable saved in a dashboard but not applied to the running
+    deployment is invisible from the outside otherwise, which is exactly the
+    failure this endpoint exists to make obvious.
+    """
+    required = ("SUPABASE_URL", "SUPABASE_ANON_KEY", "DATABASE_URL", "ANTHROPIC_API_KEY")
+    present = {k: bool(os.environ.get(k)) for k in required}
+    missing = [k for k, ok in present.items() if not ok]
+    return {
+        "ok": True,
+        "auth_configured": not AUTH_MISCONFIGURED,
+        "env_present": present,
+        "missing": missing,
+        "serving": "degraded — data endpoints return 503" if AUTH_MISCONFIGURED else "normal",
+    }
 
 
 # ── Serve PWA (must come last) ────────────────────────────────────────────────

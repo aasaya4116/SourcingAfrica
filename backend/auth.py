@@ -98,8 +98,9 @@ def _decode(token: str) -> dict:
         raise HTTPException(status_code=503, detail="Cannot verify sessions right now.")
 
     raise HTTPException(
-        status_code=500,
-        detail="Auth is not configured: set SUPABASE_URL or SUPABASE_JWT_SECRET.",
+        status_code=503,
+        detail="This deployment is missing its auth configuration. "
+               "Check /healthz to see which variables reached the server.",
     )
 
 
